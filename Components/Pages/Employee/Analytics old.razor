@@ -1,0 +1,223 @@
+﻿@* GERALD's *@
+@page "/employee/analyticsold"
+@layout UserDashboardLayout
+
+<PageTitle> Analytics</PageTitle>
+
+
+<style>
+    .clocks-body {
+        font-family: Arial, sans-serif;
+        background-color: #f5f6f5;
+        color: #FFF;
+        margin: 70px auto auto;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        max-width: 1200px;
+        width: 100%;
+
+    }
+
+    /* Left Panel (Employee Details) */
+    .left-panel,
+    .right-panel {
+        background-color: #ADF0D1;
+        color: #00203F;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .left-panel {
+        width: 100%;
+        max-width: 300px;
+        max-height: 700px;
+        padding: 15px;
+        flex: 1;
+    }
+
+    /* Right Panel (Graphs) */
+    .right-panel {
+        flex: 2;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-height: 700px;
+    }
+
+    /* Chart Container */
+    .charts-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+    }
+
+    /* Individual Charts */
+    .chart {
+        background-color: white;
+        border-radius: 10px;
+        padding: 15px;
+        flex: 1;
+        min-width: 300px;
+        /* Prevents excessive shrinking */
+        max-width: 48%;
+        max-height: 480px;
+        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+        text-align: center;
+    }
+
+
+    @*   @media
+    (max-width: 768px) {
+        .container {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .charts-container {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .chart {
+            max-width: 100%;
+        }
+
+        .left-panel {
+            width: 100%;
+            text-align: center;
+        }
+    } *@
+
+    .clocks-body a {
+        color: #ADF0D1;
+        /* Default text color */
+        text-decoration: none;
+        /* Remove underline */
+        font-weight: bold;
+        padding: 8px 12px;
+        border-radius: 5px;
+        background-color: #00203F;
+        /* Background color */
+        transition: all 0.3s ease-in-out;
+        /* Smooth animation */
+    }
+
+    .clocks-body a:hover {
+        background-color: #2DAD9D;
+        /* Change background on hover */
+        color: #00203F;
+        /* Text color on hover */
+        transform: scale(1.1);
+        /* Slightly enlarge */
+        box-shadow: 0px 4px 10px rgba(173, 240, 209, 0.5);
+        /* Add glow effect */
+    }
+
+    .clocks-body h2,
+    .chart .clocks-body h2 {
+
+        font-size: 18px;
+        font-weight: bold;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js" async defer></script>
+<div class="clocks-body">
+
+    <div class="container">
+        <!-- Left Panel: Employee Details -->
+        <div class="left-panel">
+            <h2>Employee clock times</h2>
+            <p><strong>Clock-in Time:</strong> <span id="clockInTime">08:00 AM</span></p>
+            <p><strong>Clock-out Time:</strong> <span id="clockOutTime">05:00 PM</span></p>
+            <p><strong>Total Hours Worked:</strong> <span id="totalHours">0</span> hrs</p>
+            <a href="managerTrial.html"></a>
+        </div>
+
+        <!-- Right Panel: Graphs -->
+        <div class="right-panel">
+            <h2> Employee Analytics</h2>
+            <div class="charts-container">
+                <div class="chart">
+                    <h3>Remaining Work Hours</h3>
+                    <canvas id="donutChart"></canvas>
+                </div>
+                <div class="chart">
+                    <h3>Weekly Work Hours</h3>
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Set employee times
+    let clockInTime = "08:00 AM";
+    let clockOutTime = "05:00 PM";
+
+    // Convert time to 24-hour format
+    function timeToHours(time) {
+        let [hours, minutes] = time.split(/[: ]/);
+        let isPM = time.includes("PM");
+        return (isPM && hours !== "12" ? parseInt(hours) + 12 : parseInt(hours)) + parseInt(minutes) / 60;
+    }
+
+    // Calculate total hours worked
+    let totalHoursWorked = timeToHours(clockOutTime) - timeToHours(clockInTime);
+    document.getElementById("totalHours").innerText = totalHoursWorked;
+
+    // Bar Chart (Weekly Hours Worked)
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    new Chart(barCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+            datasets: [{
+                label: 'Hours Worked',
+                data: [8, 7.5, 9, 8, 7],  // Example hours per day
+                backgroundColor: '#2DAD9D'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 10
+                }
+            }
+        }
+    });
+
+    // Donut Chart (Remaining Work Hours)
+    const donutCtx = document.getElementById('donutChart').getContext('2d');
+    new Chart(donutCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Worked', 'Remaining'],
+            datasets: [{
+                data: [totalHoursWorked, 8 - totalHoursWorked],
+                backgroundColor: ['#00203F', '#ADF0D1']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%'
+        }
+    });
+
+</script>

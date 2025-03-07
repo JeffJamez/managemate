@@ -1,0 +1,185 @@
+@* BILL's *@
+
+@using Managemate.Models
+@inject IJSRuntime JS
+@inject ManageMateDBConetxt DbContext
+@inject NavigationManager NavigationManager
+@using Microsoft.EntityFrameworkCore
+
+@rendermode InteractiveServer
+
+<style>
+    .navigation {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 5px;
+        height: 70px;
+        position: fixed;
+        top: 0;
+        z-index: 500;
+        width: 100%;
+
+    }
+
+    .logo {
+        border-radius: 300px;
+        width: 50px;
+        padding: 2px;
+    }
+
+    .selection {
+        list-style: none;
+    }
+
+    .selection li {
+        display: inline-block;
+    }
+
+    .selection li a {
+        transition: all 0.3s ease 0;
+        padding: 10px 10px;
+    }
+
+    .selection li a:hover {
+        color: #00203F;
+    }
+
+    a {
+        text-decoration: none;
+        color: rgb(0, 0, 0);
+    }
+
+    .header_button {
+        border-radius: 20px;
+        font-size: 11px;
+        height: 30px;
+        border-bottom-width: 5px;
+        width: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .navbar {
+        background-attachment: fixed;
+    }
+
+    .selection {
+        margin-top: 10px;
+    }
+
+    .selection .active {
+        text-decoration: underline;
+        text-underline-offset: 5px;
+    }
+</style>
+
+<div class="navigation" style="background-color: @(userType == "" || userType == "Employee" ? "#ADF0D1" : "#2dad9d")">
+    <a href="@(userType == "TaskManager" ? "manager" : "employee")/dashboard">
+        <img src="#" alt="LOGO">
+    </a>
+
+@if(!string.IsNullOrEmpty(userType) && !string.IsNullOrEmpty(userId)) {
+    <ul class="selection">
+            <NavLink class="@GetActiveClass("/profile")" href="/profile" Match="NavLinkMatch.All">
+                Profile
+            </NavLink>
+
+            <li>
+                <a href="/@(userType == "TaskManager" ? "manager" : "employee")/tasks">
+                    @(userType == "TaskManager" ? "Employee" : "") Tasks
+                </a>
+            </li>
+
+            <li>
+                <a href="/@(userType == "TaskManager" ? "manager" : "employee")/analytics">
+                    @(userType == "TaskManager" ? "Employee" : "") Analytics
+                </a>
+            </li>
+
+            <NavLink class="@GetActiveClass("/calendar")" href="/calendar" Match="NavLinkMatch.All">
+                Calendar
+            </NavLink>
+
+        </ul>
+        <button class="header_button" @onclick="HandleLogout">@userName</button>
+}
+    </div>
+
+
+@code {
+    private string userId;
+    private string userType;
+    private string userName;
+    private bool firstRender = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            userId = await JS.InvokeAsync<string>("getCookie", "userId");
+            userType = await JS.InvokeAsync<string>("getCookie", "userType") ?? "";
+
+            var email = await JS.InvokeAsync<string>("getCookie", "email");
+
+            userName = !string.IsNullOrEmpty(email)
+            ? email.Split('@')[0].Split('.')[0]
+            : "";
+
+            firstRender = false;
+            StateHasChanged();
+        }
+    }
+
+
+    private string GetActiveClass(string route)
+    {
+        var currentUri = NavigationManager.Uri;
+        return currentUri.EndsWith(route, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+    }
+
+    private async Task HandleLogout()
+    {
+       @*  
+            await JS.InvokeVoidAsync("deleteCookie", "userId");
+            await JS.InvokeVoidAsync("deleteCookie", "userType");
+            await JS.InvokeVoidAsync("deleteCookie", "email");
+
+
+            NavigationManager.NavigateTo("/auth/login", forceLoad: true);
+        *@
+
+         try
+        {
+            var sessionIdStr = await JS.InvokeAsync<string>("getCookie", "currentSessionId");
+            var userType = await JS.InvokeAsync<string>("getCookie", "userType");
+
+            if (userType == "Employee" && !string.IsNullOrEmpty(sessionIdStr))
+            {
+                if (int.TryParse(sessionIdStr, out int sessionId))
+                {
+                    var session = await DbContext.WorkSessions
+                        .Include(s => s.WorkLog)
+                        .FirstOrDefaultAsync(s => s.Id == sessionId);
+
+                    if (session != null)
+                    {
+                        session.CheckoutTime = DateTime.Now;
+                        var minutesWorked = (int)(session.CheckoutTime.Value - session.CheckInTime).TotalMinutes;
+                        session.WorkLog.TotalMinutesWorked += minutesWorked;
+                        await DbContext.SaveChangesAsync();
+                    }
+                }
+            }
+
+            
+            await JS.InvokeVoidAsync("clearAllCookies");
+            NavigationManager.NavigateTo("/auth/login", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during logout: {ex.Message}");
+            NavigationManager.NavigateTo("/auth/login", forceLoad: true);
+        }
+    }
+}

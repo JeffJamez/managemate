@@ -1,0 +1,626 @@
+@page "/calendar"
+@layout UserDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@using Managemate.Models
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>Calendar</PageTitle>
+
+<style>
+    .calendar-container {
+        max-width: 1000px;
+        margin: 75px auto 20px;
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .calendar-header button {
+        background-color: #baf4c7;
+        border: 0;
+        outline: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        color: #2dad9d
+    }
+
+    .calendar-header button:hover {
+        color: #2dad9d;
+        border: 0;
+        outline: none;
+        background-color: #baf4c7;
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+    }
+
+    .weekday {
+        text-align: center;
+        font-weight: bold;
+        padding: 10px;
+        background-color: #baf4c7;
+    }
+
+    .day {
+        border: 1px solid #ddd;
+        min-height: 100px;
+        padding: 5px;
+    }
+
+    .other-month {
+        background-color: #f9f9f9;
+        color: #999;
+    }
+
+    .date {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .events {
+        font-size: 0.8em;
+    }
+
+    .event {
+        background-color: #2dad9d;
+        padding: 2px 5px;
+        margin: 2px 0;
+        border-radius: 3px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .event:hover {
+        background-color: #248f82;
+    }
+
+    .floating-button {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 1000;
+    }
+</style>
+
+<div class="calendar-container">
+    <div class="calendar-header">
+        <button class="btn" @onclick="PreviousMonth">&lt;</button>
+        <h3>@CurrentMonth.ToString("MMMM yyyy")</h3>
+        <button class="btn" @onclick="NextMonth">&gt;</button>
+    </div>
+
+    <div class="calendar-grid">
+        <div class="weekday">Sun</div>
+        <div class="weekday">Mon</div>
+        <div class="weekday">Tue</div>
+        <div class="weekday">Wed</div>
+        <div class="weekday">Thu</div>
+        <div class="weekday">Fri</div>
+        <div class="weekday">Sat</div>
+
+        @foreach (var day in CalendarDays)
+        {
+            <div class="day @(day.Date.Month != CurrentMonth.Month ? "other-month" : "")">
+                <div class="date">@day.Date.Day</div>
+                @if (Events.Any(e => e.Date.Date == day.Date.Date))
+                {
+                    <div class="events">
+                        @foreach (var evt in Events.Where(e => e.Date.Date == day.Date.Date))
+                        {
+                            <div class="event" @onclick="() => ShowMeetingDetails(evt.Id)">@evt.Title</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (showCreateMeetingModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditing ? "Edit" : "Schedule New") Meeting</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@newMeeting" OnValidSubmit="CreateOrEditMeeting">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label">Agenda</label>
+                            <InputText @bind-Value="newMeeting.Agenda" class="form-control" aria-autocomplete="none" />
+                            <ValidationMessage For="@(() => newMeeting.Agenda)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Date</label>
+                            <InputDate @bind-Value="newMeeting.Date" class="form-control"
+                                min="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                            <ValidationMessage For="@(() => newMeeting.Date)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Time</label>
+                            <input type="time" class="form-control" @bind="newMeeting.Time" />
+                        </div>
+
+
+                        <div class="mb-3">
+                            <label class="form-label">Select Participants</label>
+                            @foreach (var employee in employees)
+                            {
+                                <div class="form-check">
+                                    <InputCheckbox class="form-check-input" @bind-Value="employee.IsSelected" />
+                                    <label class="form-check-label">
+                                        @employee.Email
+                                    </label>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">@(isEditing ? "Edit" : "Schedule")
+                                Meeting</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+@if (userDataLoaded && currentUserType == UserType.TaskManager)
+{
+    <button class="btn rounded-circle floating-button" style="width: 60px; height: 60px; background-color: #2dad9d;"
+        @onclick="() => showCreateMeetingModal = true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
+            <path fill="currentColor"
+                d="M11 17h2v-4h4v-2h-4V7h-2v4H7v2h4zm1 5q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22m0-2q3.35 0 5.675-2.325T20 12t-2.325-5.675T12 4T6.325 6.325T4 12t2.325 5.675T12 20m0-8" />
+        </svg>
+    </button>
+}
+
+@if (showMeetingDetailsModal && currentMeeting != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Meeting Details</h5>
+                    <button type="button" class="btn-close" @onclick="() => showMeetingDetailsModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Agenda:</strong>
+                        <p>@currentMeeting.Agenda</p>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Date & Time:</strong>
+                        <p>@currentMeeting.Date.ToString("MMM dd, yyyy hh:mm tt")</p>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Meeting Owner:</strong>
+                        <p>@currentMeeting.Owner.Email</p>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Participants:</strong>
+                        <ul class="list-unstyled">
+                            @foreach (var email in currentParticipantEmails)
+                            {
+                                <li>@email</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @if (userDataLoaded && currentUserType == UserType.TaskManager && currentMeeting.OwnerId ==
+                                    currentUserId)
+                    {
+                        <button type="button" class="btn btn-danger" @onclick="DeleteMeeting">Delete</button>
+                        <button type="button" class="btn btn-primary" @onclick="() => PrepairForEdit()">Edit</button>
+                    }
+                    <button type="button" class="btn btn-secondary"
+                        @onclick="() => showMeetingDetailsModal = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    @* 
+    LOGIC FLOW: We are performing several actions here:
+
+    1. Creating new meeting 
+    2. Selecting participants for that particular meeting
+    3. Task Manager can edit or delete meeting
+    4. Employee can see the meetings that they are part of
+
+    I made the variable & methods names as descriptive as possible
+   *@
+
+
+
+    @* This is for toggling the modal that has the new meeting form *@
+    private bool showCreateMeetingModal = false;
+
+    private bool userDataLoaded = false;
+
+    private bool isEditing = false;
+    private int? editingMeetingId = null;
+
+    private bool showMeetingDetailsModal = false;
+    private Meeting currentMeeting; // This one stores the details for the meeting in the pop up view
+    private List<string> currentParticipantEmails => currentMeeting?.Participants?
+    .Select(p => p.Participant.Email)
+    .ToList() ?? new();
+
+    private string currentUserId;
+
+    private UserType currentUserType;
+
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+            string userType = await JS.InvokeAsync<string>("getCookie", "userType");
+
+            if (userId != null && userType != null)
+            {
+                currentUserId = userId;
+                currentUserType = Enum.Parse<UserType>(userType);
+                userDataLoaded = true;
+
+
+                await LoadEmployees();
+                await LoadMeetings();
+                GenerateCalendarDays();
+
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void PrepairForEdit()
+    {
+        newMeeting = new NewMeeting
+        {
+            Agenda = currentMeeting.Agenda,
+            Date = currentMeeting.Date.Date,
+            Time = TimeOnly.FromDateTime(currentMeeting.Date)
+        };
+
+        isEditing = true;
+        editingMeetingId = currentMeeting.Id;
+
+        foreach (var employee in employees)
+        {
+            employee.IsSelected = currentParticipantEmails.Contains(employee.Email);
+        }
+
+        showMeetingDetailsModal = false;
+        showCreateMeetingModal = true;
+    }
+
+
+
+    private async Task ShowMeetingDetails(int meetingId)
+    {
+        try
+        {
+            var meeting = await DbContext.Meetings
+            .Include(m => m.Owner)
+            .Include(m => m.Participants)
+            .ThenInclude(p => p.Participant)
+            .FirstOrDefaultAsync(m => m.Id == meetingId);
+
+            if (meeting is not null)
+            {
+                currentMeeting = meeting;
+                showMeetingDetailsModal = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading meeting details: {ex.Message}");
+        }
+    }
+
+
+    private async Task DeleteMeeting()
+    {
+        try
+        {
+            var meeting = await DbContext.Meetings.FindAsync(currentMeeting.Id);
+            if (meeting != null)
+            {
+                DbContext.Meetings.Remove(meeting);
+                await DbContext.SaveChangesAsync();
+                showMeetingDetailsModal = false;
+                await LoadMeetings();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting meeting: {ex.Message}");
+        }
+    }
+
+    @* This is the object that we will assign the values of the new NewMeeting being created *@
+    private NewMeeting newMeeting = new();
+
+
+    @* This is the object that we will hold the employees selected to be part of the meeting being created *@
+    private List<EmployeeSelectModel> employees = new();
+
+
+
+    @* List of dates for a month *@
+    private List<DateTime> CalendarDays { get; set; } = new();
+
+
+
+    @* 
+        REMEMBER: 'OnAfterRenderAsync' is an inbuilt method that is called IMMEDIATELY the page is loaded on the browser 
+        So we use it to get user info from cookies, then fetch the respective user meetings
+    *@
+
+
+
+    public class CompanyEvent
+    {
+        public int Id { get; set; }
+        public DateTime Date { get; set; }
+        public string Title { get; set; }
+    }
+
+    private List<CompanyEvent> Events = new();
+
+
+    @* 
+        This method generate days of a particular month, then we use 
+        loop over those dates to create the calendar UI 
+    *@
+
+    @* Initialize a date value for current month *@
+    private DateTime CurrentMonth { get; set; } = DateTime.Now;
+
+
+    private void GenerateCalendarDays()
+    {
+        CalendarDays.Clear();
+
+        var firstDayOfMonth = new DateTime(CurrentMonth.Year, CurrentMonth.Month, 1);
+        var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
+
+        var firstDayOfCalendar = firstDayOfMonth.AddDays(-(int)firstDayOfMonth.DayOfWeek);
+
+        for (var date = firstDayOfCalendar; date <= lastDayOfMonth.AddDays(6 - (int)lastDayOfMonth.DayOfWeek); date =
+        date.AddDays(1))
+        {
+            CalendarDays.Add(date);
+        }
+    }
+
+
+    @* 
+        The 'PreviousMonth'and 'NextMonth' methods are used for navigationg the calendar 
+        These methods will be bounded to buttons
+    *@
+    private async Task PreviousMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(-1);
+        GenerateCalendarDays();
+
+        await LoadMeetings();
+    }
+
+    private async Task NextMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(1);
+        GenerateCalendarDays();
+
+        await LoadMeetings();
+    }
+
+
+    @* For Getting a list of employees that task manager will decide who will be participants *@
+    private async Task LoadEmployees()
+    {
+        var dbEmployees = await DbContext.Users
+        .Where(u => u.UserType == UserType.Employee)
+        .ToListAsync();
+
+        employees = dbEmployees.Select(e => new EmployeeSelectModel
+        {
+            UserId = e.UserId,
+            Email = e.Email,
+            IsSelected = false
+        }).ToList();
+    }
+
+
+    @* 
+        Getting a list of meetings, so that they can be placed on the calendar grid
+        If it is a task manager logged in, then get the meetings that were created by that task manager
+        If it is an employee whose logged in, get the employees that are participants of that meeting
+    *@
+
+    private async Task LoadMeetings()
+    {
+
+        if (!userDataLoaded)
+        {
+            return;
+        }
+
+
+        IQueryable<Meeting> meetingsQuery;
+
+        if (currentUserType == UserType.TaskManager)
+        {
+            meetingsQuery = DbContext.Meetings
+            .Where(m => m.OwnerId == currentUserId
+            && m.Date.Month == CurrentMonth.Month
+            && m.Date.Year == CurrentMonth.Year);
+        }
+        else
+        {
+            meetingsQuery = DbContext.Meetings
+            .Where(m => m.Participants.Any(p => p.ParticipantId == currentUserId)
+            && m.Date.Month == CurrentMonth.Month
+            && m.Date.Year == CurrentMonth.Year);
+        }
+
+        var dbMeetings = await meetingsQuery.ToListAsync();
+
+        Events = dbMeetings.Select(m => new CompanyEvent
+        {
+            Id = m.Id,
+            Date = m.Date,
+            Title = m.Agenda
+        }).ToList();
+    }
+
+
+    @* 
+        The following activities are happening here:
+        1. saving the newly created meeting
+        2. saving the selected participants 
+        3. If a meeting is being edited, use those new details to update from old details
+        
+    *@
+    private async Task CreateOrEditMeeting()
+    {
+        try
+        {
+            if (newMeeting.GetDateTime() < DateTime.Now)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(currentUserId))
+            {
+                Console.WriteLine("Error: No user ID found");
+                return;
+            }
+
+            if (isEditing && editingMeetingId.HasValue)
+            {
+                var meeting = await DbContext.Meetings
+                .Include(m => m.Participants)
+                .FirstOrDefaultAsync(m => m.Id == editingMeetingId);
+
+                if (meeting != null)
+                {
+                    meeting.Agenda = newMeeting.Agenda;
+                    meeting.Date = newMeeting.GetDateTime();
+
+                    @* if a meeting is being deleted, then delete old participants tooo *@
+                    DbContext.MeetingParticipants.RemoveRange(meeting.Participants);
+
+                    @* Then add the new incoming list *@
+                    var newParticipants = employees
+                    .Where(e => e.IsSelected)
+                    .Select(e => new MeetingParticipant
+                    {
+                        MeetingId = meeting.Id,
+                        ParticipantId = e.UserId,
+                        NotificationSent = false
+                    });
+
+
+
+                    await DbContext.MeetingParticipants.AddRangeAsync(newParticipants);
+                    await DbContext.SaveChangesAsync();
+                }
+            }
+            else
+            {
+                var meeting = new Meeting
+                {
+                    Agenda = newMeeting.Agenda,
+                    Date = newMeeting.GetDateTime(),
+                    OwnerId = currentUserId
+                };
+
+                await DbContext.Meetings.AddAsync(meeting);
+                await DbContext.SaveChangesAsync();
+
+                var participants = employees
+                .Where(e => e.IsSelected)
+                .Select(e => new MeetingParticipant
+                {
+                    MeetingId = meeting.Id,
+                    ParticipantId = e.UserId,
+                    NotificationSent = false
+                });
+
+                await DbContext.MeetingParticipants.AddRangeAsync(participants);
+                await DbContext.SaveChangesAsync();
+
+            }
+
+
+            await LoadMeetings();
+            CloseModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating meeting: {ex.Message}");
+        }
+    }
+
+    private void CloseModal()
+    {
+        showCreateMeetingModal = false;
+        newMeeting = new();
+        employees.ForEach(e => e.IsSelected = false);
+        isEditing = false;
+        editingMeetingId = null;
+    }
+
+    private class NewMeeting
+    {
+        [Required(ErrorMessage = "Agenda is required")]
+        public string Agenda { get; set; }
+
+        [Required(ErrorMessage = "Date is required")]
+        public DateTime Date { get; set; } = DateTime.Today;
+
+        public TimeOnly? Time { get; set; } = TimeOnly.FromDateTime(DateTime.Now);
+
+        public DateTime GetDateTime()
+        {
+            return Time.HasValue
+            ? Date.Add(Time.Value.ToTimeSpan())
+            : Date;
+        }
+    }
+
+    private class EmployeeSelectModel
+    {
+        public string UserId { get; set; }
+        public string Email { get; set; }
+        public bool IsSelected { get; set; }
+    }
+}

@@ -1,0 +1,651 @@
+@page "/admin/reports2"
+@layout AdminDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@using Managemate.Models
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>Task Reports</PageTitle>
+
+<style>
+    .reports-container {}
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .table-container {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .search-box {
+        max-width: 300px;
+        margin-bottom: 20px;
+    }
+
+    .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 60vh;
+    }
+
+    .filter-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .filter-item {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .status-filter .btn {
+        border-radius: 20px;
+        margin-right: 5px;
+        font-size: 12px;
+    }
+
+    .status-filter .btn-active {
+        background-color: #2dad9d;
+        color: white;
+    }
+
+    .skill-button {
+        border: none;
+        background-color: rgb(194, 194, 194);
+        transition: all 0.2s;
+        color: #000;
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+
+    .skill-button:hover {
+        background-color: #2dad9d;
+    }
+
+    .selected {
+        background-color: #2dad9d;
+        color: #fff;
+    }
+
+    .task-item {
+        padding: 15px;
+        border-radius: 8px;
+        background-color: white;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .task-title {
+        font-weight: bold;
+        font-size: 16px;
+    }
+
+    .task-metadata {
+        display: flex;
+        gap: 15px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .task-footer {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 10px;
+    }
+
+    .task-skills {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+</style>
+
+@if (isLoading)
+{
+    <div class="spinner-container">
+        <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="reports-container">
+        <div class="page-header">
+            <h2>Task Reports</h2>
+            <button class="btn btn-success" style="background-color: #2A9D8F; border:0" @onclick="() => showCreateModal = true">
+                <i class="bi bi-plus-circle"></i> Create Task
+            </button>
+        </div>
+
+        <div class="filter-bar">
+            <div class="filter-item">
+                <label class="form-label">Search Tasks</label>
+                <div class="input-group">
+                    <span class="input-group-text" id="search-addon">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" class="form-control" placeholder="Search tasks..." 
+                            @bind="searchTerm" @bind:event="oninput" @onkeyup="FilterTasks" />
+                </div>
+            </div>
+
+            <div class="filter-item">
+                <label class="form-label">Creator</label>
+                <select class="form-select" @bind="creatorFilter" @bind:after="FilterTasks">
+                    <option value="">All Creators</option>
+                    @foreach (var creator in taskCreators)
+                    {
+                        <option value="@creator.UserId">@creator.Email</option>
+                    }
+                </select>
+            </div>
+
+            <div class="filter-item">
+                <label class="form-label">Assignee</label>
+                <select class="form-select" @bind="assigneeFilter" @bind:after="FilterTasks">
+                    <option value="">All Assignees</option>
+                    @foreach (var employee in employees)
+                    {
+                        <option value="@employee.UserId">@employee.Email</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="status-filter mb-3">
+            <label class="form-label d-block">Status Filter</label>
+            <button class="btn @(statusFilter == null ? "btn-active" : "btn-outline-secondary")" 
+                    @onclick="() => SetStatusFilter(null)">
+                All
+            </button>
+            <button class="btn @(statusFilter == STATUSENUM.UnAssigned ? "btn-active" : "btn-outline-secondary")" 
+                    @onclick="() => SetStatusFilter(STATUSENUM.UnAssigned)">
+                Unassigned
+            </button>
+            <button class="btn @(statusFilter == STATUSENUM.InProgress ? "btn-active" : "btn-outline-secondary")" 
+                    @onclick="() => SetStatusFilter(STATUSENUM.InProgress)">
+                In Progress
+            </button>
+            <button class="btn @(statusFilter == STATUSENUM.Complete ? "btn-active" : "btn-outline-secondary")" 
+                    @onclick="() => SetStatusFilter(STATUSENUM.Complete)">
+                Complete
+            </button>
+            <button class="btn @(statusFilter == STATUSENUM.Reviewed ? "btn-active" : "btn-outline-secondary")" 
+                    @onclick="() => SetStatusFilter(STATUSENUM.Reviewed)">
+                Reviewed
+            </button>
+        </div>
+
+        <div class="table-container">
+            <h4 class="mb-3">Tasks (@filteredTasks.Count)</h4>
+
+            @if (filteredTasks.Any())
+            {
+                foreach (var task in filteredTasks)
+                {
+                    <div class="task-item">
+                        <div class="task-header">
+                            <div class="task-title">@task.Name</div>
+                            <span class="badge @GetStatusBadgeClass(task.Status)">@task.Status</span>
+                        </div>
+
+                        <div>@task.Description</div>
+
+                        <div class="task-metadata mt-2">
+                            <div>
+                                <i class="bi bi-person"></i>
+                                Created by: @(GetCreatorEmail(task.CreatedById))
+                            </div>
+                            <div>
+                                <i class="bi bi-calendar"></i>
+                                Due: @task.Deadline.ToString("MMM dd, yyyy")
+                            </div>
+                            @if (task.AssignedUsers.Any())
+                            {
+                                                            <div>
+                                                                <i class="bi bi-person-check"></i>
+                                                                Assigned to: @(task.AssignedUsers.FirstOrDefault()?.AssignedEmployee?.Email?.Split('@')[0] ?? "None")
+                                                            </div>
+                            }
+                            else
+                            {
+                                                            <div>
+                                                                <i class="bi bi-person-x"></i>
+                                                                Not assigned
+                                                            </div>
+                            }
+                        </div>
+
+                        <div class="task-footer">
+                            <div class="task-skills">
+                                @foreach (var skill in task.SkillsNeeded?.Split(',') ?? Array.Empty<string>())
+                                {
+                                                                <span class="badge bg-light text-dark">@skill</span>
+                                }
+                            </div>
+
+                            <div>
+                                @if (task.Status == STATUSENUM.UnAssigned)
+                                {
+                                                                <button class="btn btn-sm btn-primary" @onclick="() => ShowAssignModal(task)">
+                                                                    <i class="bi bi-person-plus"></i> Assign
+                                                                </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="text-muted">No tasks match the current filters.</p>
+            }
+        </div>
+    </div>
+}
+
+@if (showCreateModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Task</h5>
+                    <button type="button" class="btn-close" @onclick="() => showCreateModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@newTask" OnValidSubmit="CreateTask">
+                        <DataAnnotationsValidator />
+
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Task Name</label>
+                                    <InputText @bind-Value="newTask.Name" class="form-control" />
+                                    <ValidationMessage For="@(() => newTask.Name)" />
+                                </div>
+                            </div>
+
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Deadline</label>
+                                    <InputDate @bind-Value="newTask.Deadline" class="form-control" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <InputTextArea @bind-Value="newTask.Description" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Select Task Manager</label>
+                            <InputSelect @bind-Value="selectedCreatorId" class="form-select">
+                                <option value="">-- Select a Task Manager --</option>
+                                @foreach (var manager in taskManagers)
+                                {
+                                                                <option value="@manager.UserId">@manager.Email</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Select skills needed for this task</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var skill in availableSkills)
+                                {
+                                                                <button type="button"
+                                                                    class="btn skill-button @(selectedSkills.Contains(skill) ? "selected" : "")"
+                                                                    @onclick="@(e => ToggleSkill(skill))">
+                                                                    @skill
+                                                                </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary"
+                                @onclick="() => showCreateModal = false">Close</button>
+                            <button type="submit" class="btn btn-primary" disabled="@(!selectedSkills.Any() || string.IsNullOrEmpty(selectedCreatorId))">
+                                Create Task
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAssignModal)
+{
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Assign Task: @selectedTask?.Name</h5>
+                        <button type="button" class="btn-close" @onclick="CloseAssignModal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        @if (qualifiedEmployees.Any())
+                        {
+                            <EditForm Model="@assignmentModel" OnValidSubmit="AssignTask">
+                                <div class="mb-3">
+                                    <div class="my-3">@qualifiedEmployees.Count() employee(s) qualify for this task</div>
+
+                                    <label class="form-label">Select employee to assign the task to:</label>
+                                    <InputSelect class="form-select" @bind-Value="assignmentModel.SelectedEmployeeId">
+                                        <option value="">Choose an employee...</option>
+                                        @foreach (var employee in qualifiedEmployees)
+                                        {
+                                                                        <option value="@employee.UserId">@employee.Email</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" @onclick="CloseAssignModal">Cancel</button>
+                                    <button type="submit" class="btn btn-primary">Assign</button>
+                                </div>
+                            </EditForm>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">
+                                No employee qualifies for this task.
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="CloseAssignModal">Close</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<TaskToDo> allTasks = new();
+    private List<TaskToDo> filteredTasks = new();
+    private List<User> taskCreators = new();
+    private List<User> employees = new();
+    private List<User> taskManagers = new();
+    
+    private string searchTerm = "";
+    private string creatorFilter = "";
+    private string assigneeFilter = "";
+    private STATUSENUM? statusFilter = null;
+    
+    private bool showCreateModal = false;
+    private TaskToDo newTask = new()
+    {
+        TaskId = $"TSK-{Guid.NewGuid().ToString().Substring(0, 8)}",
+        Status = STATUSENUM.UnAssigned,
+        Deadline = DateTime.Now.AddDays(7)
+    };
+    private string selectedCreatorId = "";
+    private List<string> selectedSkills = new();
+
+        @* For these tasks we've broken the DRY principle of programming, but wth *@
+    private List<string> availableSkills = new()
+    {
+        "Technical", "Problem Solving", "Cultural Awareness",
+        "Analytical Thinking", "Customer Focus", "Initiative",
+        "Project Management", "Negotiation Skills", "Conflict Resolution",
+        "Graphic Design", "Programming", "Web Hosting",
+        "Attention To Detail", "Time Management", "Collaboration",
+        "Leadership", "Adaptability"
+    };
+    
+    private bool showAssignModal = false;
+    private TaskToDo selectedTask;
+    private List<User> qualifiedEmployees = new();
+    private AssignmentModel assignmentModel = new();
+
+    private class AssignmentModel
+    {
+        public string SelectedEmployeeId { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string adminId = await JS.InvokeAsync<string>("getCookie", "userId");
+            string userType = await JS.InvokeAsync<string>("getCookie", "userType");
+            
+            if (!string.IsNullOrEmpty(adminId) && userType == UserType.Admin.ToString())
+            {
+                await LoadData();
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/profile");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading reports: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadData()
+    {
+        @* get Load all tasks with their related data *@
+        allTasks = await DbContext.TasksToDo
+            .Include(t => t.AssignedUsers)
+                .ThenInclude(au => au.AssignedEmployee)
+            .ToListAsync();
+            
+        filteredTasks = allTasks;
+        
+        @* get all users for filtering *@
+        var users = await DbContext.Users.ToListAsync();
+        
+        taskCreators = users
+            .Where(u => allTasks.Select(t => t.CreatedById).Contains(u.UserId))
+            .ToList();
+            
+        employees = users
+            .Where(u => u.UserType == UserType.Employee)
+            .ToList();
+            
+        taskManagers = users
+            .Where(u => u.UserType == UserType.TaskManager)
+            .ToList();
+    }
+
+    private void FilterTasks()
+    {
+        filteredTasks = allTasks;
+        
+        @* the filtering stuff *@
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredTasks = filteredTasks
+                .Where(t =>
+                    t.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||  @* makes the search case-insensitive *@
+                    t.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    (t.SkillsNeeded != null && t.SkillsNeeded.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                )
+                .ToList();
+        }
+        
+         @* Apply creator filter *@
+        if (!string.IsNullOrEmpty(creatorFilter))
+        {
+            filteredTasks = filteredTasks
+                .Where(t => t.CreatedById == creatorFilter)
+                .ToList();
+        }
+        
+         @* Apply assignee filter *@
+        if (!string.IsNullOrEmpty(assigneeFilter))
+        {
+            filteredTasks = filteredTasks
+                .Where(t => t.AssignedUsers.Any(au => au.AssignedEmployeeId == assigneeFilter))
+                .ToList();
+        }
+        
+         @* Apply status filter *@
+        if (statusFilter.HasValue)
+        {
+            filteredTasks = filteredTasks
+                .Where(t => t.Status == statusFilter.Value)
+                .ToList();
+        }
+    }
+
+    private void SetStatusFilter(STATUSENUM? status)
+    {
+        statusFilter = status;
+        FilterTasks();
+    }
+
+    private string GetStatusBadgeClass(STATUSENUM status)
+    {
+        return status switch
+        {
+            STATUSENUM.Complete => "bg-success",
+            STATUSENUM.InProgress => "bg-warning",
+            STATUSENUM.UnAssigned => "bg-secondary",
+            STATUSENUM.Reviewed => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetCreatorEmail(string creatorId)
+    {
+        return taskCreators
+            .FirstOrDefault(u => u.UserId == creatorId)?.Email
+            ?? "Unknown";
+    }
+
+    private void ToggleSkill(string skill)
+    {
+        if (selectedSkills.Contains(skill))
+        {
+            selectedSkills.Remove(skill);
+        }
+        else
+        {
+            selectedSkills.Add(skill);
+        }
+    }
+
+    private async Task CreateTask()
+    {
+        try
+        {
+            newTask.CreatedById = selectedCreatorId;
+            newTask.SkillsNeeded = string.Join(",", selectedSkills);
+
+            DbContext.TasksToDo.Add(newTask);
+            await DbContext.SaveChangesAsync();
+
+            await LoadData();
+            showCreateModal = false;
+
+            @* Reset form *@
+            newTask = new()
+            {
+                TaskId = $"TSK-{Guid.NewGuid().ToString().Substring(0, 8)}",
+                Status = STATUSENUM.UnAssigned,
+                Deadline = DateTime.Now.AddDays(7)
+            };
+            selectedCreatorId = "";
+            selectedSkills.Clear();
+            
+            await JS.InvokeVoidAsync("alert", "Task created successfully!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating task: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Error creating task.");
+        }
+    }
+
+    private async Task ShowAssignModal(TaskToDo task)
+    {
+        selectedTask = task;
+
+        var requiredSkills = task.SkillsNeeded?.Split(',').ToList() ?? new List<string>();
+
+        qualifiedEmployees = employees.Where(emp =>
+        {
+            if (string.IsNullOrEmpty(emp.Skills)) return false;
+            
+            var employeeSkills = emp.Skills.Split(',').ToList();
+            return requiredSkills.All(skill => employeeSkills.Contains(skill));
+        }).ToList();
+
+        assignmentModel = new AssignmentModel();
+        showAssignModal = true;
+    }
+
+    private async Task AssignTask()
+    {
+        if (selectedTask != null && !string.IsNullOrEmpty(assignmentModel.SelectedEmployeeId))
+        {
+            try
+            {
+                var userTask = new UserTask
+                {
+                    AssignedEmployeeId = assignmentModel.SelectedEmployeeId,
+                    TaskId = selectedTask.TaskId
+                };
+
+                selectedTask.Status = STATUSENUM.InProgress;
+
+                await DbContext.UserTasks.AddAsync(userTask);
+                await DbContext.SaveChangesAsync();
+
+                await LoadData();
+                CloseAssignModal();
+                
+                await JS.InvokeVoidAsync("alert", "Task assigned successfully!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error assigning task: {ex.Message}");
+                await JS.InvokeVoidAsync("alert", "Error assigning task.");
+            }
+        }
+    }
+
+    private void CloseAssignModal()
+    {
+        showAssignModal = false;
+        selectedTask = null;
+        qualifiedEmployees.Clear();
+        assignmentModel = new();
+    }
+}

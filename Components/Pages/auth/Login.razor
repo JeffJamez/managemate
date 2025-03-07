@@ -1,0 +1,308 @@
+@* GLORIA's *@
+
+@page "/auth/login"
+@layout NoSidebar
+
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.EntityFrameworkCore;
+@using Managemate.Models
+@inject IHttpContextAccessor HttpContextAccessor
+@inject NavigationManager NavigationManager
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+
+<PageTitle>Login In</PageTitle>
+
+<style>
+    .main-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: calc(100vh - 50px);
+        padding: 2rem;
+    }
+
+    .page {
+        width: 100%;
+        max-width: 400px;
+    }
+
+    h1 {
+        text-align: center;
+        color: #333;
+        margin: 2rem 0;
+        font-weight: 600;
+        font-size: 1.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    input {
+        width: 100%;
+        padding: 0.8rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background-color: #f0f1f1;
+        color: #333;
+    }
+
+    input::placeholder {
+        color: #666;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+
+    .dropdown {
+        position: relative;
+        width: 100%;
+    }
+
+    .dropdown select {
+        width: 100%;
+        padding: 0.8rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        appearance: none;
+        background-color: #adf0d1;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+    }
+
+    .dropdown select option {
+        background-color: white;
+        color: #333;
+        padding: 0.8rem;
+    }
+
+    .btn {
+        background-color: #adf0d1;
+        color: #333;
+        padding: 0.8rem 2rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        display: block;
+        margin: 2rem auto;
+        transition: background-color 0.3s;
+        text-transform: uppercase;
+        font-weight: 500;
+    }
+
+    .btn:hover {
+        background-color: #7ad1a5;
+    }
+
+    .signup-link {
+        text-align: center;
+        margin-top: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .signup-link a {
+        color: #333;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .signup-link a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="main-content">
+    <div class="page" id="signupPage">
+        <h1>Login In</h1>
+        <EditForm Model="@loginModel" OnValidSubmit="HandleLogin" FormName="LoginForm">
+            <DataAnnotationsValidator />
+
+            <div class="form-group mb-3">
+                <label for="accountType">Select Account Type</label>
+                <div class="dropdown">
+                    <InputSelect id="accountType" class="inputSignup" @bind-Value="loginModel.UserType">
+                        <option value="">-- Select --</option>
+                        <option value="Employee">Employee</option>
+                        <option value="TaskManager">Task Manager</option>
+                        <option value="Admin">Admin</option>
+                    </InputSelect>
+                </div>
+            </div>
+
+
+            <div class="form-group mb-3">
+                <label for="email">Company Email</label>
+                <InputText id="email" class="inputSignup" @bind-Value="loginModel.Email" />
+                <ValidationMessage For="@(() => loginModel.Email)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="email">Password</label>
+                <InputText type="password" class="inputSignup" id="password" @bind-Value="loginModel.Password" />
+
+                <ValidationMessage For="@(() => loginModel.Password)" />
+            </div>
+
+
+            <button type="submit" class="btn">Login </button>
+            <div class="signup-link">
+                Don't have an account? <a href="/auth/signup">Sign Up</a>
+            </div>
+        </EditForm>
+    </div>
+
+</div>
+
+
+@code {
+    private LoginModel loginModel = new();
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(loginModel.Email))
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Email is required!");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(loginModel.Password))
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Password is required!");
+                return;
+            }
+
+
+            var user = await DbContext.Users.FirstOrDefaultAsync(u => u.Email == loginModel.Email);
+
+            Console.WriteLine("\n\n");
+            Console.WriteLine($"loginModel.Email {loginModel.Email}");
+            Console.WriteLine($"user {user}");
+            Console.WriteLine("\n\n");
+
+
+            if (user == null)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Account not found.");
+                return;
+            }
+
+            if (user.UserType != loginModel.UserType)
+            {
+
+                await JSRuntime.InvokeVoidAsync("alert", "No account for this user type");
+                return;
+            }
+
+
+            if (user.Password != loginModel.Password)
+            {
+
+                await JSRuntime.InvokeVoidAsync("alert", "Invalid email or password.");
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync("setCookie", "userId", user.UserId);
+            await JSRuntime.InvokeVoidAsync("setCookie", "userType", user.UserType.ToString());
+            await JSRuntime.InvokeVoidAsync("setCookie", "email", user.Email);
+
+
+            if (user.UserType == UserType.Employee)
+            {
+                try
+                {
+                    var today = DateTime.Today;
+                    var now = DateTime.Now;
+
+                    @*  Get or create today's work log *@
+                    var workLog = await DbContext.WorkLogs
+                    .Include(w => w.Sessions)
+                    .FirstOrDefaultAsync(w =>
+                    w.EmployeeId == user.UserId &&
+                    w.LogDate.Date == today);
+
+                    if (workLog == null)
+                    {
+                        workLog = new WorkLog
+                        {
+                            EmployeeId = user.UserId,
+                            LogDate = today,
+                            Sessions = new List<WorkSession>()
+                        };
+                        DbContext.WorkLogs.Add(workLog);
+                    }
+
+                    @* Add new session *@
+                    var session = new WorkSession
+                    {
+                        CheckInTime = now
+                    };
+                    workLog.Sessions.Add(session);
+
+                    await DbContext.SaveChangesAsync();
+
+                    @* tore session ID in cookie for tracking logout *@
+                    await JSRuntime.InvokeVoidAsync("setCookie", "currentSessionId", session.Id.ToString());
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error logging work time: {ex.Message}");
+                }
+            }
+
+
+
+            if (user.UserType == UserType.Admin)
+            {
+                NavigationManager.NavigateTo("/admin/dashboard", forceLoad: true);
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/profile", forceLoad: true);
+
+            }
+
+            @* switch (user.UserType)
+            {
+                case UserType.Employee:
+                    NavigationManager.NavigateTo("/employee/dashboard", forceLoad: true);
+                    break;
+                case UserType.TaskManager:
+                    NavigationManager.NavigateTo("/manager/dashboard", forceLoad: true);
+                    break;
+                case UserType.Admin:
+                    NavigationManager.NavigateTo("/admin/dashboard", forceLoad: true);
+                    break;
+            } *@
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during login: {ex.Message}");
+            await JSRuntime.InvokeVoidAsync("alert", "An error occurred during login.");
+        }
+    }
+
+    public class LoginModel
+    {
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email format")]
+        public string Email { get; set; }
+
+        [Required(ErrorMessage = "Password is required")]
+        public string Password { get; set; }
+
+        [Required(ErrorMessage = "Select Account Type")]
+        public UserType UserType { get; set; }
+    }
+}

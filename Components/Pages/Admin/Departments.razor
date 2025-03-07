@@ -1,0 +1,532 @@
+@page "/admin/departments2"
+@layout AdminDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@using Managemate.Models
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>Department Management</PageTitle>
+
+<style>
+    .departments-container {}
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .departments-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .department-card {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 20px;
+        position: relative;
+    }
+
+    .department-name {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #2dad9d;
+    }
+
+    .department-member {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    .department-member:last-child {
+        border-bottom: none;
+    }
+
+    .member-name {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .department-actions {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        gap: 5px;
+    }
+
+    .btn-circle {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .badge-role {
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-size: 10px;
+        font-weight: normal;
+    }
+
+    .badge-admin {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .badge-manager {
+        background-color: #fd7e14;
+        color: white;
+    }
+
+    .badge-employee {
+        background-color: #2dad9d;
+        color: white;
+    }
+
+    .add-member-btn {
+        width: 100%;
+        border: 2px dashed #ccc;
+        background-color: transparent;
+        padding: 8px;
+        border-radius: 4px;
+        color: #666;
+        margin-top: 10px;
+    }
+
+    .add-member-btn:hover {
+        background-color: #f5f5f5;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 30px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+
+    .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 60vh;
+    }
+</style>
+
+@if (isLoading)
+{
+    <div class="spinner-container">
+        <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="departments-container">
+        <div class="page-header">
+            <h2>Department Management</h2>
+            <button class="btn btn-success" style="background-color: #2dad9d; border: 0" @onclick="ShowCreateDepartmentModal">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
+            <path fill="currentColor"
+                d="M11 17h2v-4h4v-2h-4V7h-2v4H7v2h4zm1 5q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22m0-2q3.35 0 5.675-2.325T20 12t-2.325-5.675T12 4T6.325 6.325T4 12t2.325 5.675T12 20m0-8" />
+        </svg> Create Department
+            </button>
+        </div>
+        
+        @if (departments.Any())
+        {
+            <div class="departments-grid">
+                @foreach (var department in departments)
+                {
+                    <div class="department-card">
+                        <div class="department-name">@department.Name</div>
+                        <div class="department-actions">
+                            <button class="btn btn-warning btn-circle" @onclick="() => ShowEditDepartmentModal(department)">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-2 2v-4.25L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.438.65T21 6.4q0 .4-.137.763t-.438.662L7.25 21zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"></path></svg>
+                            </button>
+                            <button class="btn btn-danger btn-circle" @onclick="() => DeleteDepartment(department)">
+                               <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"></path></svg>
+                            </button>
+                        </div>
+                        
+                        <p>Members (@department.Members.Count):</p>
+                        
+                        @if (department.Members.Any())
+                        {
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                @foreach (var member in department.Members)
+                                {
+                                    <div class="department-member">
+                                        <div class="member-name">
+                                            @member.User.Email
+                                            <span class="badge badge-role @GetRoleBadgeClass(member.User.UserType)">
+                                                @member.User.UserType
+                                            </span>
+                                        </div>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => RemoveMember(member)">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12.998H5v-2h14z"/></svg>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No members in this department.</p>
+                        }
+                        
+                        <button class="add-member-btn" @onclick="() => ShowAddMemberModal(department)">
+                            <i class="bi bi-person-plus"></i> Add Member
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <h4>No Departments Found</h4>
+                <p>Create your first department to get started!</p>
+                <button class="btn btn-primary" @onclick="ShowCreateDepartmentModal">
+                    <i class="bi bi-plus-circle"></i> Create Department
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@if (showCreateDepartmentModal || showEditDepartmentModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(showEditDepartmentModal ? "Edit Department" : "Create Department")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@departmentModel" OnValidSubmit="SaveDepartment">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Department Name</label>
+                            <InputText @bind-Value="departmentModel.Name" class="form-control" />
+                            <ValidationMessage For="@(() => departmentModel.Name)" />
+                        </div>
+                        
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAddMemberModal && selectedDepartment != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Member to @selectedDepartment.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@memberModel" OnValidSubmit="AddMember">
+                        <div class="mb-3">
+                            <label class="form-label">Select User</label>
+                            <InputSelect @bind-Value="memberModel.UserId" class="form-select">
+                                <option value="">-- Select a User --</option>
+                                @foreach (var user in availableUsers)
+                                {
+                                    <option value="@user.UserId">@user.Email (@user.UserType)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                            <button type="submit" class="btn btn-primary" disabled="@string.IsNullOrEmpty(memberModel.UserId)">
+                                Add Member
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showDeleteConfirmation)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete @(itemToDelete == "department" ? selectedDepartment?.Name : "this member")?</p>
+                    <p class="text-danger">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<Department> departments = new();
+    private List<User> allUsers = new();
+    
+     @* Create/Edit Department *@
+    private bool showCreateDepartmentModal = false;
+    private bool showEditDepartmentModal = false;
+    private DepartmentModel departmentModel = new();
+    
+     @* Add Member *@
+    private bool showAddMemberModal = false;
+    private Department selectedDepartment;
+    private List<User> availableUsers = new();
+    private MemberModel memberModel = new();
+    
+     @* Delete  *@
+    private bool showDeleteConfirmation = false;
+    private string itemToDelete = "";
+    private DepartmentMember memberToDelete;
+    
+    private class DepartmentModel
+    {
+        public int Id { get; set; }
+        
+        [Required(ErrorMessage = "Department name is required")]
+        public string Name { get; set; }
+    }
+    
+    private class MemberModel
+    {
+        public string UserId { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string adminId = await JS.InvokeAsync<string>("getCookie", "userId");
+            string userType = await JS.InvokeAsync<string>("getCookie", "userType");
+            
+            if (!string.IsNullOrEmpty(adminId) && userType == UserType.Admin.ToString())
+            {
+                await LoadData();
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/profile");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading departments: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadData()
+    {
+        departments = await DbContext.Departments
+            .Include(d => d.Members)
+                .ThenInclude(m => m.User)
+            .ToListAsync();
+            
+        allUsers = await DbContext.Users.ToListAsync();
+    }
+    
+    private void ShowCreateDepartmentModal()
+    {
+        departmentModel = new DepartmentModel();
+        showCreateDepartmentModal = true;
+    }
+    
+    private void ShowEditDepartmentModal(Department department)
+    {
+        departmentModel = new DepartmentModel
+        {
+            Id = department.Id,
+            Name = department.Name
+        };
+        
+        selectedDepartment = department;
+        showEditDepartmentModal = true;
+    }
+    
+    private async Task SaveDepartment()
+    {
+        try
+        {
+            if (showEditDepartmentModal && selectedDepartment != null)
+            {
+                 @* Update existing department *@
+                selectedDepartment.Name = departmentModel.Name;
+                DbContext.Departments.Update(selectedDepartment);
+            }
+            else
+            {
+                 @* Create new department *@
+                var newDepartment = new Department
+                {
+                    Name = departmentModel.Name,
+                    Members = new List<DepartmentMember>()
+                };
+                
+                DbContext.Departments.Add(newDepartment);
+            }
+            
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+            CloseModals();
+            
+            await JS.InvokeVoidAsync("alert", showEditDepartmentModal 
+                ? "Department updated successfully!" 
+                : "Department created successfully!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving department: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Error saving department.");
+        }
+    }
+    
+    private void ShowAddMemberModal(Department department)
+    {
+        selectedDepartment = department;
+        memberModel = new MemberModel();
+        
+         @* Filter out users who are already members of this department *@
+        var existingMemberIds = department.Members.Select(m => m.UserId).ToList();
+        availableUsers = allUsers
+            .Where(u => !existingMemberIds.Contains(u.UserId))
+            .ToList();
+            
+        showAddMemberModal = true;
+    }
+    
+    private async Task AddMember()
+    {
+        if (selectedDepartment != null && !string.IsNullOrEmpty(memberModel.UserId))
+        {
+            try
+            {
+                var newMember = new DepartmentMember
+                {
+                    DepartmentId = selectedDepartment.Id,
+                    UserId = memberModel.UserId
+                };
+                
+                DbContext.DepartmentMembers.Add(newMember);
+                await DbContext.SaveChangesAsync();
+                
+                await LoadData();
+                CloseModals();
+                
+                await JS.InvokeVoidAsync("alert", "Member added successfully!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error adding member: {ex.Message}");
+                await JS.InvokeVoidAsync("alert", "Error adding member.");
+            }
+        }
+    }
+    
+    private void RemoveMember(DepartmentMember member)
+    {
+        memberToDelete = member;
+        itemToDelete = "member";
+        showDeleteConfirmation = true;
+    }
+    
+    private void DeleteDepartment(Department department)
+    {
+        selectedDepartment = department;
+        itemToDelete = "department";
+        showDeleteConfirmation = true;
+    }
+    
+    private async Task ConfirmDelete()
+    {
+        try
+        {
+            if (itemToDelete == "department" && selectedDepartment != null)
+            {
+                DbContext.Departments.Remove(selectedDepartment);
+                await DbContext.SaveChangesAsync();
+                await JS.InvokeVoidAsync("alert", "Department deleted successfully!");
+            }
+            else if (itemToDelete == "member" && memberToDelete != null)
+            {
+                DbContext.DepartmentMembers.Remove(memberToDelete);
+                await DbContext.SaveChangesAsync();
+                await JS.InvokeVoidAsync("alert", "Member removed successfully!");
+            }
+            
+            await LoadData();
+            CloseModals();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Error processing deletion.");
+        }
+    }
+    
+    private void CloseModals()
+    {
+        showCreateDepartmentModal = false;
+        showEditDepartmentModal = false;
+        showAddMemberModal = false;
+        showDeleteConfirmation = false;
+        selectedDepartment = null;
+        memberToDelete = null;
+        itemToDelete = "";
+    }
+    
+    private string GetRoleBadgeClass(UserType userType)
+    {
+        return userType switch
+        {
+            UserType.Admin => "badge-admin",
+            UserType.TaskManager => "badge-manager",
+            UserType.Employee => "badge-employee",
+            _ => ""
+        };
+    }
+}

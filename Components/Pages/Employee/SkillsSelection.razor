@@ -1,0 +1,165 @@
+﻿@* BILL's *@
+@page "/employee/skills"
+@layout UserDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@using Microsoft.EntityFrameworkCore
+@using Managemate.Models
+
+<PageTitle> Skills</PageTitle>
+
+<style>
+    .select_body {
+        margin: 20px auto auto;
+        margin-top: 75px
+    }
+
+    .title {
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-weight: bold;
+        font-size: 22px;
+    }
+
+    .select_button {
+        height: 35px;
+        width: 200px;
+        border-radius: 10px;
+        background-color: rgb(194, 194, 194);
+        border: none;
+    }
+
+    .saveSkillsBtn {
+        height: 35px;
+        width: 200px;
+        border-radius: 10px;
+        border-color: rgb(194, 194, 194);
+        background-color: #fff;
+        color: #000;
+
+    }
+
+    .button:focus {
+        background-color: aqua;
+    }
+
+
+
+    .select_button:hover {
+        background-color: #adf0d1;
+        transition: background-color 0.2s;
+        transform: scale(1.1);
+    }
+
+    .inclusive {
+        background-color: #adf0d1;
+    }
+
+    .center_selection {
+        display: flex;
+        align-content: center;
+    }
+
+    .selection_options {
+        list-style: none;
+    }
+
+    .selection_options li {
+        display: inline-block;
+        padding-bottom: 40px;
+        padding-left: 70px;
+        padding-right: 70px;
+    }
+</style>
+
+<main class="select_body">
+    <div class="title">Kindly select all the skills that are relevant to you</div>
+    <br />
+    <div class="center_selection">
+        <ul class="selection_options">
+            @foreach (var skill in availableSkills)
+            {
+
+                <li>
+                    <button class="select_button @(selectedSkills.Contains(skill) ? "inclusive" : "")"
+                        @onclick="@(e => ToggleSkill(skill))">@skill</button>
+                </li>
+
+            }
+        </ul>
+    </div>
+
+    <div class="d-flex justify-content-center">
+        @if (selectedSkills.Any())
+        {
+
+            <a href="/employee/dashboard">
+                <button @onclick="SaveSkills" class="saveSkillsBtn">Save My Skills</button>
+            </a>
+        }
+    </div>
+</main>
+
+
+@code {
+    private List<string> selectedSkills = new();
+
+    private List<string> availableSkills = new()
+{ "Techincal", "Problem Solving", "Cultural Awareness", "Analytical Thinking", "Customer Focus",
+
+"Initiative", "Project Management", "Negotiation Skills", "Conflict Resolution", "Graphic Design", "Programming",
+
+"Web Hosting", "Attention To Detail", "Time Manaements", "Collaboration", "Time Management", "Leadership",
+"Adaptability" };
+
+
+    private User user = new User();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+
+            var user = await DbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (user != null && !string.IsNullOrEmpty(user.Skills))
+            {
+                selectedSkills = user.Skills.Split(',').ToList();
+                StateHasChanged();
+            }
+        }
+    }
+
+
+    private void ToggleSkill(string skill)
+    {
+        if (selectedSkills.Contains(skill))
+        {
+            selectedSkills.Remove(skill);
+        }
+        else
+        {
+            selectedSkills.Add(skill);
+
+        }
+    }
+
+    private async Task SaveSkills()
+    {
+        string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+
+        var user = await DbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+
+        if (user != null)
+        {
+            user.Skills = string.Join(",", selectedSkills);
+            await DbContext.SaveChangesAsync();
+
+            NavigationManager.NavigateTo("/employee/dashboard");
+        }
+    }
+}

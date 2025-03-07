@@ -1,0 +1,64 @@
+@inherits LayoutComponentBase
+@layout AuthLayout
+@inject NavigationManager NavigationManager
+
+<div class="admin-layout">
+    <nav class="navbar" style="background-color: #9CEACD; height:70px">
+        <div class="container-fluid d-flex justify-content-center">
+            <div class="navbar-brand">
+                ADMIN
+            </div>
+        </div>
+    </nav>
+    <div class="d-flex">
+        <div class="sidebar" style="background-color: #2A9D8F; width: 200px; min-height: calc(100vh - 56px);">
+            <div class="list-group list-group-flush">
+                <a href="/admin/overview" class="list-group-item list-group-item-action mb-3 @(IsActive("overview"))"
+                    style="background-color: transparent; color: black; border: none;">
+                    Overview
+                </a>
+                <a href="/admin/departments"
+                    class="list-group-item list-group-item-action mb-3 @(IsActive("departments"))"
+                    style="background-color: transparent; color: black; border: none;">
+                    Departments
+                </a>
+                <a href="/admin/workinghours"
+                    class="list-group-item list-group-item-action mb-3 @(IsActive("working-hours"))"
+                    style="background-color: transparent; color: black; border: none;">
+                    Working hours
+                </a>
+                <a href="/admin/reports" class="list-group-item list-group-item-action mb-3 @(IsActive("reports"))"
+                    style="background-color: transparent; color: black; border: none;">
+                    Reports
+                </a>
+
+                <AdminLogoutBtn />
+
+            </div>
+        </div>
+        <div class="content p-4 w-100">
+            @Body
+        </div>
+    </div>
+</div>
+
+<style>
+    .admin-layout {
+        min-height: 100vh;
+    }
+
+    .navbar-brand {
+        color: #264653 !important;
+        font-weight: bold;
+    }
+</style>
+
+@code {
+    private string IsActive(string page)
+    {
+        var currentUri = NavigationManager.Uri;
+        return currentUri.Contains(page) ? "active" : "";
+    }
+
+
+}

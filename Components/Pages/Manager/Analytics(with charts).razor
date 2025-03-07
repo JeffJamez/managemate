@@ -1,0 +1,607 @@
+@page "/manager/analytics(with charts)"
+@layout UserDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@using Managemate.Models
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+
+<PageTitle>Employee Analytics</PageTitle>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+<style>
+    .analytics-body {
+        margin-top: 70px;
+        font-family: Arial, sans-serif;
+        background-color: #f5f6fa;
+        color: #fff;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .search-container {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+
+    .search-container input {
+        padding: 10px;
+        font-size: 16px;
+        width: 50%;
+        max-width: 500px;
+        border: 2px solid #adf0d1;
+        border-radius: 10px;
+    }
+
+    .employee-icons {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 15px;
+        justify-content: center;
+        width: 90%;
+        max-width: 800px;
+    }
+
+    .employee-icon {
+        background-color: #adf0d1;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        cursor: pointer;
+        color: #00203f;
+    }
+
+    .employee-icon img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+    }
+
+    .employee-info p {
+        margin: 5px 0;
+    }
+
+    .status {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
+
+    .status.active {
+        background-color: #2dad9d;
+    }
+
+    .status.inactive {
+        background-color: red;
+    }
+
+.analytics-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+   background-color: rgba(0, 0, 0, 0.3); /* Reduced opacity from 0.5 to 0.3 */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+    .analytics-modal-content {
+        background-color: #adf0d1;
+        padding: 20px;
+        border-radius: 10px;
+        width: 50%;
+        max-width: 600px;
+        max-height: 80vh;
+        text-align: center;
+        position: relative;
+        overflow-y: auto;
+    }
+
+    .analytics-modal-content h2 {
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .charts-container {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .charts-container canvas {
+        max-width: 45%;
+        max-height: 200px;
+    }
+
+    .close-btn {
+        position: relative;
+        display: block;
+        margin-left: auto;
+        background-color: #00203f;
+        color: white;
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 60vh;
+        width: 100%;
+    }
+
+    .info-box {
+        background-color: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        width: 90%;
+        max-width: 800px;
+        color: #333;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .info-box h3 {
+        color: #2dad9d;
+        margin-top: 0;
+    }
+
+    .metrics-container {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .metric {
+        text-align: center;
+        padding: 10px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        min-width: 120px;
+    }
+
+    .metric-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #00203f;
+    }
+
+    .metric-label {
+        font-size: 14px;
+        color: #666;
+    }
+
+    .no-employees {
+        text-align: center;
+        padding: 20px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        width: 80%;
+        color: #333;
+    }
+
+    .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+
+.analytics-modal-content {
+    z-index: 1001;
+    background-color: #adf0d1;
+    padding: 20px;
+    border-radius: 10px;
+    width: 50%;
+    max-width: 600px;
+    max-height: 80vh;
+    text-align: center;
+    position: relative;
+    overflow-y: auto;
+}
+</style>
+
+@if (isLoading)
+{
+    <div class="spinner-container">
+        <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (LoggedInUserType == UserType.TaskManager)
+{
+    <div class="analytics-body">
+        
+        <div class="info-box">
+            <h3>Task Management Overview</h3>
+            <div class="metrics-container">
+                <div class="metric">
+                    <div class="metric-value">@totalTasksCreated</div>
+                    <div class="metric-label">Tasks Created</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">@completedTasks</div>
+                    <div class="metric-label">Completed</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">@inProgressTasks</div>
+                    <div class="metric-label">In Progress</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">@employeeMetrics.Count</div>
+                    <div class="metric-label">Assigned Employees</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="search-container">
+            <input type="text" id="searchBar" placeholder="Search Employees..." @bind="searchTerm" @bind:event="oninput" @onkeyup="FilterEmployees">
+        </div>
+
+        @if (filteredEmployees.Any())
+        {
+            <div class="employee-icons" id="employeeList">
+                @foreach (var employee in filteredEmployees)
+                {
+                    <div class="employee-icon" @onclick="() => ShowEmployeeModal(employee)">
+                        <img src="/images/employee.png" alt="@employee.Email">
+                        <div class="employee-info">
+                            <p>@employee.Email.Split('@')[0]</p>
+                            <p>
+                                <span class="status @(employee.InProgressTasks > 0 ? "active" : "inactive")"></span>
+                                @(employee.InProgressTasks > 0 ? "Active" : "Inactive")
+                            </p>
+                            <p>Tasks: @employee.TotalTasks</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="no-employees">
+                <p>No employees found matching your search criteria.</p>
+            </div>
+        }
+
+        <div class="analytics-modal" id="employeeModal" style="display: @(showModal ? "flex" : "none")">
+            <div class="analytics-modal-content">
+                @if (selectedEmployee != null)
+                {
+                    <h2>Employee Analytics - <span id="employeeName">@selectedEmployee.Email.Split('@')[0]</span></h2>
+                    <p><strong>Status:</strong> <span id="employeeStatus">@(selectedEmployee.InProgressTasks > 0 ? "Active" : "Inactive")</span></p>
+                    <p><strong>Tasks Assigned:</strong> <span id="employeeTasks">@selectedEmployee.TotalTasks</span></p>
+                    <p><strong>Completed Tasks:</strong> <span id="employeeCompleted">@selectedEmployee.CompletedTasks</span></p>
+                    <p><strong>Total Hours Worked:</strong> <span id="employeeHours">@((selectedEmployee.TotalMinutesWorked / 60.0).ToString("0.0"))</span></p>
+                    
+                    @if (selectedEmployee.AverageRating > 0)
+                    {
+                        <p><strong>Average Rating:</strong> <span id="employeeRating">@selectedEmployee.AverageRating.ToString("0.0")</span></p>
+                    }
+                    else
+                    {
+                        <p><strong>Average Rating:</strong> <span id="employeeRating">Not yet rated</span></p>
+                    }
+
+                    <div class="charts-container">
+                        <canvas id="barChartModal"></canvas>
+                        <canvas id="donutChartModal"></canvas>
+                    </div>
+                }
+
+                <button class="close-btn" @onclick="CloseModal">Close</button>
+            </div>
+            
+            <div  @onclick="CloseModal"></div>
+        </div>
+
+    </div>
+}
+else
+{
+    <div class="alert alert-info m-5">
+        Analytics are only available for Task Managers.
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private string LoggedInUserId;
+    private UserType LoggedInUserType;
+    private string searchTerm = "";
+    private bool showModal = false;
+    private EmployeeSummary selectedEmployee;
+    
+    private List<EmployeeSummary> employeeMetrics = new();
+    private List<EmployeeSummary> filteredEmployees = new();
+    private int totalTasksCreated;
+    private int completedTasks;
+    private int inProgressTasks;
+    private int unassignedTasks;
+    
+    private class EmployeeSummary
+    {
+        public string UserId { get; set; }
+        public string Email { get; set; }
+        public int TotalTasks { get; set; }
+        public int CompletedTasks { get; set; }
+        public int InProgressTasks { get; set; }
+        public double AverageRating { get; set; }
+        public int TotalMinutesWorked { get; set; }
+            
+            
+        @* Placeholder for chart data *@
+        public List<int> DailyHours { get; set; } = new List<int> { 8, 7, 9, 8, 7 };
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+            string userType = await JS.InvokeAsync<string>("getCookie", "userType");
+            
+            if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(userType))
+            {
+                LoggedInUserId = userId;
+                LoggedInUserType = Enum.Parse<UserType>(userType);
+                
+                if (LoggedInUserType == UserType.TaskManager)
+                {
+                    await LoadAnalyticsData();
+                    filteredEmployees = employeeMetrics;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading analytics: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+  private async Task LoadAnalyticsData()
+{
+    try
+    {
+        var taskManagerTasks = await DbContext.TasksToDo
+            .Where(t => t.CreatedById == LoggedInUserId)
+            .ToListAsync();
+
+        Console.WriteLine($"Found {taskManagerTasks.Count} tasks created by this task manager");
+            
+        totalTasksCreated = taskManagerTasks.Count;
+        completedTasks = taskManagerTasks.Count(t => t.Status == STATUSENUM.Complete || t.Status == STATUSENUM.Reviewed);
+        inProgressTasks = taskManagerTasks.Count(t => t.Status == STATUSENUM.InProgress);
+        unassignedTasks = taskManagerTasks.Count(t => t.Status == STATUSENUM.UnAssigned);
+
+        var taskIds = taskManagerTasks.Select(t => t.TaskId).ToList();
+        
+        var userTasks = await DbContext.UserTasks
+            .Include(ut => ut.AssignedEmployee)
+            .Include(ut => ut.TasksToDo)
+            .ToListAsync();
+            
+        userTasks = userTasks.Where(ut => taskIds.Contains(ut.TaskId)).ToList();
+        
+        Console.WriteLine($"Found {userTasks.Count} task assignments");
+
+        var groupedByEmployee = userTasks
+            .GroupBy(ut => ut.AssignedEmployeeId)
+            .ToList();
+            
+        Console.WriteLine($"Found {groupedByEmployee.Count} employees with assigned tasks");
+        
+        employeeMetrics = new List<EmployeeSummary>();
+        
+        foreach (var group in groupedByEmployee)
+        {
+            var employeeId = group.Key;
+            var employee = group.First().AssignedEmployee;
+            
+            if (employee == null)
+            {
+                Console.WriteLine($"Employee {employeeId} not found");
+                continue;
+            }
+            
+            var tasksForEmployee = group.ToList();
+            var completedTasksCount = tasksForEmployee
+                .Count(ut => ut.TasksToDo.Status == STATUSENUM.Complete || ut.TasksToDo.Status == STATUSENUM.Reviewed);
+            var inProgressTasksCount = tasksForEmployee
+                .Count(ut => ut.TasksToDo.Status == STATUSENUM.InProgress);
+                
+            var workLogs = await DbContext.WorkLogs
+                .Where(wl => wl.EmployeeId == employeeId)
+                .ToListAsync();
+                
+            var totalMinutes = workLogs.Sum(wl => wl.TotalMinutesWorked);
+                
+            double avgRating = 0;
+            var ratedTasks = tasksForEmployee
+                .Where(ut => ut.TasksToDo.Rating.HasValue)
+                .ToList();
+                
+            if (ratedTasks.Any())
+            {
+                avgRating = ratedTasks.Average(ut => ut.TasksToDo.Rating.Value);
+            }
+                
+            employeeMetrics.Add(new EmployeeSummary
+            {
+                UserId = employeeId,
+                Email = employee.Email,
+                TotalTasks = tasksForEmployee.Count,
+                CompletedTasks = completedTasksCount,
+                InProgressTasks = inProgressTasksCount,
+                AverageRating = avgRating,
+                TotalMinutesWorked = totalMinutes
+            });
+                
+            Console.WriteLine($"Added metrics for {employee.Email} with {tasksForEmployee.Count} tasks");
+        }
+
+        Console.WriteLine($"Final employee metrics count: {employeeMetrics.Count}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error in LoadAnalyticsData: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+    }
+
+    if (!employeeMetrics.Any())
+    {
+        Console.WriteLine("No employees found. Creating demo data for display.");
+        employeeMetrics = new List<EmployeeSummary>
+        {
+            new EmployeeSummary 
+            { 
+                UserId = "demo1",
+                Email = "employee1@blablabla.com", 
+                TotalTasks = 5,
+                CompletedTasks = 3,
+                InProgressTasks = 2,
+                TotalMinutesWorked = 480,
+                AverageRating = 3.5,
+                DailyHours = new List<int> { 8, 7, 9, 8, 7 }
+            },
+            new EmployeeSummary 
+            { 
+                UserId = "demo2",
+                Email = "employee2@blablabla.com", 
+                TotalTasks = 3,
+                CompletedTasks = 1,
+                InProgressTasks = 2,
+                TotalMinutesWorked = 360,
+                AverageRating = 2.5,
+                DailyHours = new List<int> { 7, 8, 6, 7, 8 }
+            }
+        };
+    }
+    
+    filteredEmployees = employeeMetrics;
+}
+
+
+private void FilterEmployees()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredEmployees = employeeMetrics;
+        }
+        else
+        {
+            filteredEmployees = employeeMetrics
+                .Where(e => e.Email.ToLower().Contains(searchTerm.ToLower()))
+                .ToList();
+        }
+    }
+    
+    private async Task ShowEmployeeModal(EmployeeSummary employee)
+    {
+        selectedEmployee = employee;
+        showModal = true;
+        
+        @* Jus to give time for charts to load before rendering charts *@
+        await Task.Delay(100);
+        
+        var barChartData = new
+        {
+            labels = new[] { "Mon", "Tue", "Wed", "Thu", "Fri" },
+            datasets = new[]
+            {
+                new
+                {
+                    label = "Hours Worked",
+                    data = employee.DailyHours,
+                    backgroundColor = "#2DAD9D"
+                }
+            }
+        };
+        
+        var donutChartData = new
+        {
+            labels = new[] { "Completed", "In Progress" },
+            datasets = new[]
+            {
+                new
+                {
+                    data = new[] { employee.CompletedTasks, employee.InProgressTasks },
+                    backgroundColor = new[] { "#00203F", "#ADF0D1" }
+                }
+            }
+        };
+        
+        @* Up to this point, can Render the charts using Chart.js *@
+        await JS.InvokeVoidAsync("renderCharts", 
+            JsonSerializer.Serialize(barChartData), 
+            JsonSerializer.Serialize(donutChartData));
+    }
+    
+    private void CloseModal()
+{
+    showModal = false;
+    StateHasChanged();
+}
+}
+
+@inject IJSRuntime JS
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+
+            @* Embedded it in blazor fashion equivalent coz using the script was ju giving me heaadaches *@
+            await JS.InvokeVoidAsync("eval", @"
+                function renderCharts(barChartData, donutChartData) {
+                    barChartData = JSON.parse(barChartData);
+                    donutChartData = JSON.parse(donutChartData);
+                    
+                    // Clear existing charts if any
+                    if (window.barChart) window.barChart.destroy();
+                    if (window.donutChart) window.donutChart.destroy();
+                    
+                    const barCtx = document.getElementById('barChartModal').getContext('2d');
+                    window.barChart = new Chart(barCtx, {
+                        type: 'bar',
+                        data: barChartData,
+                        options: { responsive: true }
+                    });
+                    
+                    const donutCtx = document.getElementById('donutChartModal').getContext('2d');
+                    window.donutChart = new Chart(donutCtx, {
+                        type: 'doughnut',
+                        data: donutChartData,
+                        options: { 
+                            cutout: '70%',
+                            responsive: true
+                        }
+                    });
+                }
+            ");
+        }
+    }
+}

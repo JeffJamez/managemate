@@ -1,0 +1,392 @@
+@page "/admin/overview2"
+@layout AdminDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@using Managemate.Models
+@using Microsoft.EntityFrameworkCore
+
+<PageTitle>Admin Overview</PageTitle>
+
+<style>
+    .overview-container {}
+
+    .table-container {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .user-table {
+        width: 100%;
+    }
+
+    .user-table th {
+        background-color: #f0f0f0;
+        padding: 10px;
+        text-align: left;
+        color: #333;
+    }
+
+    .user-table td {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .user-table tr:hover {
+        background-color: #f9f9f9;
+    }
+
+    .badge-role {
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: normal;
+    }
+
+    .badge-admin {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .badge-manager {
+        background-color: #2A9D8F;
+        color: white;
+    }
+
+    .badge-employee {
+        background-color: #9CEACD;
+        color: white;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 5px;
+    }
+
+    .btn-circle {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .search-box {
+        max-width: 300px;
+        margin-bottom: 20px;
+    }
+
+    .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 60vh;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .stats-container {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        flex: 1;
+        background-color: white;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #2dad9d;
+    }
+
+    .stat-label {
+        font-size: 14px;
+        color: #666;
+    }
+</style>
+
+@if (isLoading)
+{
+    <div class="spinner-container">
+        <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="overview-container">
+        <div class="page-header">
+            <h2>User Management</h2>
+            <button class="btn btn-success" style="background-color: #2A9D8F; border:0;" @onclick="AddNewUser">
+                <i class="bi bi-plus-circle"></i> Add User
+            </button>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-value">@totalUsers</div>
+                <div class="stat-label">Total Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">@adminCount</div>
+                <div class="stat-label">Admins</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">@managerCount</div>
+                <div class="stat-label">Task Managers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">@employeeCount</div>
+                <div class="stat-label">Employees</div>
+            </div>
+        </div>
+
+        <div class="input-group search-box">
+            <span class="input-group-text" id="search-addon">
+                <i class="bi bi-search"></i>
+            </span>
+            <input type="text" class="form-control" placeholder="Search users..." @bind="searchTerm" @bind:event="oninput"
+                @onkeyup="FilterUsers" />
+        </div>
+
+        <div class="table-container">
+            <table class="user-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Joined On</th>
+                        <th>Skills</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in filteredUsers)
+                    {
+                        <tr>
+                            <td>@user.Email.Split('@')[0]</td>
+                            <td>@user.Email</td>
+                            <td>
+                                <span class="badge badge-role @GetRoleBadgeClass(user.UserType)">
+                                    @user.UserType
+                                </span>
+                            </td>
+                            <td>@user.JoinedOn.ToString("MMM dd, yyyy")</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(user.Skills))
+                                {
+                                    foreach (var skill in user.Skills.Split(','))
+                                    {
+                                        <span class="badge bg-light text-dark me-1">@skill</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No skills</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn btn-info btn-circle" style="background-color: #9CEACD; border:0;" @onclick="() => ViewUserDetails(user.UserId)"
+                                        title="View Details">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 12 12"><g fill="none"><path d="M1.974 6.659a.5.5 0 0 1-.948-.317c-.01.03 0-.001 0-.001a1.661 1.661 0 0 1 .062-.162c.04-.095.099-.226.18-.381c.164-.31.422-.723.8-1.136C2.835 3.827 4.088 3 6 3c1.913 0 3.166.827 3.931 1.662a5.473 5.473 0 0 1 .98 1.517c.02.047.035.085.045.113c.004.008.014.06.024.11c.009.046.017.09.02.098c0 0 .084.333-.342.474a.5.5 0 0 1-.632-.314v-.003l-.007-.016a3.676 3.676 0 0 0-.172-.376a4.477 4.477 0 0 0-.653-.927C8.584 4.673 7.587 4 6 4s-2.584.673-3.194 1.338a4.477 4.477 0 0 0-.795 1.225a2.184 2.184 0 0 0-.03.078l-.007.018z" fill="currentColor"></path><path d="M6 5a2 2 0 1 0 0 4a2 2 0 0 0 0-4zM5 7a1 1 0 1 1 2 0a1 1 0 0 1-2 0z" fill="currentColor"></path></g></svg>
+                                    </button>
+                                  @*   <button class="btn btn-warning btn-circle" @onclick="() => EditUser(user)"
+                                        title="Edit User">
+                                       <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-2 2v-4.25L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.438.65T21 6.4q0 .4-.137.763t-.438.662L7.25 21zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z"></path></svg>
+                                    </button> *@
+                                    <button class="btn btn-danger btn-circle" @onclick="() => DeleteUser(user)"
+                                        title="Delete User">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413T17 21zM17 6H7v13h10zM9 17h2V8H9zm4 0h2V8h-2zM7 6v13z"></path></svg>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (showDeleteModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the user <strong>@userToDelete?.Email</strong>?</p>
+                    <p class="text-danger">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<User> allUsers = new();
+    private List<User> filteredUsers = new();
+    private string searchTerm = "";
+
+    @* The statistics appearing at the top *@
+    private int totalUsers;
+    private int adminCount;
+    private int managerCount;
+    private int employeeCount;
+
+    @* for the delete modal pop up *@
+    private bool showDeleteModal = false;
+    private User userToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+            string userType = await JS.InvokeAsync<string>("getCookie", "userType");
+
+            if (!string.IsNullOrEmpty(userId) && userType == UserType.Admin.ToString())
+            {
+                await LoadUsers();
+                UpdateStats();
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/profile");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading admin overview: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadUsers()
+    {
+        allUsers = await DbContext.Users.ToListAsync();
+        filteredUsers = allUsers;
+    }
+
+    private void UpdateStats()
+    {
+        totalUsers = allUsers.Count;
+        adminCount = allUsers.Count(u => u.UserType == UserType.Admin);
+        managerCount = allUsers.Count(u => u.UserType == UserType.TaskManager);
+        employeeCount = allUsers.Count(u => u.UserType == UserType.Employee);
+    }
+
+    private void FilterUsers()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredUsers = allUsers;
+        }
+        else
+        {
+            filteredUsers = allUsers
+            .Where(u =>
+            u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+            (u.Skills != null && u.Skills.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            )
+            .ToList();
+        }
+    }
+
+    private string GetRoleBadgeClass(UserType userType)
+    {
+        return userType switch
+        {
+            UserType.Admin => "badge-admin",
+            UserType.TaskManager => "badge-manager",
+            UserType.Employee => "badge-employee",
+            _ => ""
+        };
+    }
+
+    private void ViewUserDetails(string userId)
+    {
+        NavigationManager.NavigateTo($"/admin/overview/{userId}");
+    }
+
+    private void AddNewUser()
+    {
+        @* Navigate to user creation page  *@
+        NavigationManager.NavigateTo("/admin/users/create");
+    }
+
+    private void EditUser(User user)
+    {
+        @* Navigate to user edit page  *@
+        NavigationManager.NavigateTo($"/admin/users/edit/{user.UserId}");
+    }
+
+    private void DeleteUser(User user)
+    {
+        userToDelete = user;
+        showDeleteModal = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteModal = false;
+        userToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (userToDelete != null)
+        {
+            try
+            {
+                DbContext.Users.Remove(userToDelete);
+                await DbContext.SaveChangesAsync();
+
+                await LoadUsers();
+                UpdateStats();
+
+                showDeleteModal = false;
+                userToDelete = null;
+
+                await JS.InvokeVoidAsync("alert", "User deleted successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting user: {ex.Message}");
+                await JS.InvokeVoidAsync("alert", "Error deleting user. Please try again.");
+            }
+        }
+    }
+}

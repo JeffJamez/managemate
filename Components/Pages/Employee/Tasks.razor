@@ -1,0 +1,280 @@
+@page "/employee/tasks"
+@layout UserDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@using Microsoft.EntityFrameworkCore
+@using Managemate.Models
+
+<PageTitle>Your Tasks</PageTitle>
+
+<style>
+    .tasks-body {
+        margin: 70px auto auto;
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: #f9f9f9;
+    }
+
+    .tasks-container {
+        display: flex;
+        justify-content: space-around;
+        padding: 20px;
+        background-color: white;
+    }
+
+    .tasks-column {
+        width: 30%;
+        text-align: center;
+        max-height: 500px;
+        overflow-y: auto;
+        border: 3px solid black;
+        padding: 20px;
+        background: #f0f0f0;
+        border-radius: 10px;
+    }
+
+    .task-item {
+        background: white;
+        margin: 10px 0;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.1);
+        cursor: pointer;
+        font-size: 16px;
+    }
+
+    .divider {
+        width: 3px;
+        background: black;
+        height: auto;
+    }
+
+    .tasks-progress {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+    }
+
+    .step {
+        width: 20px;
+        height: 20px;
+        background: lightgray;
+        border-radius: 50%;
+        display: inline-block;
+        transition: background 0.3s;
+        cursor: pointer;
+    }
+
+    .completed {
+        background: #b8f5d0;
+    }
+
+    .tasks-column h3 {
+        font-size: 16px;
+    }
+
+    .task-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        padding: 25px;
+        border: 3px solid black;
+        box-shadow: 0 0 12px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        border-radius: 10px;
+    }
+
+    .task-modal button {
+        margin-top: 10px;
+        cursor: pointer;
+        padding: 10px 15px;
+        background-color: #299F92;
+        border: none;
+        color: white;
+        border-radius: 5px;
+        font-size: 16px;
+    }
+
+
+    .in-progress-btn {
+        background-color: #ADF0D1;
+    }
+
+    .in-progress-btn:hover {
+        background-color: #ADF0D1;
+    }
+
+    .mark-complete-btn {
+        background-color: #2dad9d;
+        margin-right: 13px;
+    }
+
+    .mark-complete-btn:hover {
+        background-color: #2dad9d;
+    }
+</style>
+
+<div class="tasks-body">
+    <section class="tasks-container">
+        <div class="tasks-column">
+            <h3>IN PROGRESS</h3>
+            @foreach (var task in userTasks.Where(t => t.Status == STATUSENUM.InProgress))
+            {
+                <div class="task-item">
+                    <h5>@task.Name</h5>
+                    <p class="small">Deadline: @task.Deadline.ToString("MMM dd, yyyy")</p>
+
+                    <button class="btn mark-complete-btn btn-sm" @onclick="() => MarkTaskAsComplete(task)">
+                        Mark as Complete
+                    </button>
+
+                    <button class="btn in-progress-btn btn-sm" @onclick="() => ShowTaskDetails(task)">
+                        View Details
+                    </button>
+
+
+                </div>
+            }
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="tasks-column">
+            <h3>COMPLETED</h3>
+            @foreach (var task in userTasks.Where(t => t.Status == STATUSENUM.Complete || t.Status ==
+                        STATUSENUM.Reviewed))
+            {
+                <div class="task-item">
+                    <h5>@task.Name</h5>
+                    <div>
+                        @if (task.Status == STATUSENUM.Reviewed && !string.IsNullOrEmpty(task.Review))
+                        {
+                            <button class="btn mark-complete-btn btn-sm" @onclick="() => ShowReview(task)">
+                                See Review
+                            </button>
+                        }
+                        <button class="btn in-progress-btn btn-sm" @onclick="() => ShowTaskDetails(task)">
+                            View Details
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+@* This one is tha Task Details Modal *@
+@if (showTaskModal && selectedTask != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@selectedTask.Name</h5>
+                    <button type="button" class="btn-close" @onclick="() => showTaskModal = false"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p><strong>Description:</strong> @selectedTask.Description</p>
+                    <p><strong>Deadline:</strong> @selectedTask.Deadline.ToString("MMM dd, yyyy")</p>
+                    <p><strong>Skills Needed:</strong> @selectedTask.SkillsNeeded</p>
+                    <p><strong>Status:</strong> @selectedTask.Status</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showTaskModal = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* This one is tha Review Modal *@
+@if (showReviewModal && selectedTask != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Task Review</h5>
+                    <button type="button" class="btn-close" @onclick="() => showReviewModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Review from the task-item manager</p>
+                    <q class="text-muted">@selectedTask.Review</q>
+
+                    <div class="d-flex align-items-center gap-2 my-2">
+                        <span class="text-muted">Rating:</span>
+                        <div class="progress" style="height: 20px; width: 100px;">
+                            <div class="progress-bar"
+                                style="width: @(selectedTask.Rating * 25)%; background-color: #2dad9d;">
+                                @selectedTask.Rating/4
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showReviewModal = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+
+@code {
+    private string currentUserId;
+    private List<TaskToDo> userTasks = new();
+    private TaskToDo selectedTask;
+    private bool showTaskModal = false;
+    private bool showReviewModal = false;
+
+    @* This Function is called EVERYTIME the webpage is loaded *@
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+            if (userId != null)
+            {
+                currentUserId = userId;
+                await LoadUserTasks();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task LoadUserTasks()
+    {
+        userTasks = await DbContext.TasksToDo
+        .Include(t => t.AssignedUsers)
+        .Where(t => t.AssignedUsers.Any(u => u.AssignedEmployeeId == currentUserId))
+        .ToListAsync();
+    }
+
+    private async Task MarkTaskAsComplete(TaskToDo task)
+    {
+        task.Status = STATUSENUM.Complete;
+        await DbContext.SaveChangesAsync();
+        await LoadUserTasks();
+    }
+
+    private void ShowTaskDetails(TaskToDo task)
+    {
+        selectedTask = task;
+        showTaskModal = true;
+    }
+
+    private void ShowReview(TaskToDo task)
+    {
+        selectedTask = task;
+        showReviewModal = true;
+    }
+}

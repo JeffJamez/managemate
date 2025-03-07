@@ -1,0 +1,282 @@
+@* GLORIA's *@
+
+@page "/auth/signup"
+@layout NoSidebar
+
+@using PostmarkDotNet;
+
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.EntityFrameworkCore;
+@using Managemate.Models
+@using System.Security.Claims
+@inject NavigationManager NavigationManager
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IConfiguration Configuration
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+
+<PageTitle>Sign Up</PageTitle>
+
+<style>
+    .main-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: calc(100vh - 50px);
+        padding: 2rem;
+    }
+
+    .page {
+        width: 100%;
+        max-width: 400px;
+    }
+
+    h1 {
+        text-align: center;
+        color: #333;
+        margin: 2rem 0;
+        font-weight: 600;
+        font-size: 1.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    input {
+        width: 100%;
+        padding: 0.8rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background-color: #f0f1f1;
+        color: #333;
+    }
+
+    input::placeholder {
+        color: #666;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+
+    .dropdown {
+        position: relative;
+        width: 100%;
+    }
+
+    .dropdown select {
+        width: 100%;
+        padding: 0.8rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        appearance: none;
+        background-color: #adf0d1;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+    }
+
+    .dropdown select option {
+        background-color: white;
+        color: #333;
+        padding: 0.8rem;
+    }
+
+    .btn {
+        background-color: #adf0d1;
+        color: #333;
+        padding: 0.8rem 2rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        display: block;
+        margin: 2rem auto;
+        transition: background-color 0.3s;
+        text-transform: uppercase;
+        font-weight: 500;
+    }
+
+    .btn:hover {
+        background-color: #7ad1a5;
+    }
+
+    .signup-link {
+        text-align: center;
+        margin-top: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .signup-link a {
+        color: #333;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .signup-link a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="main-content">
+    <div class="page" id="signupPage">
+        <h1>SIGN UP</h1>
+        <EditForm Model="@user" OnValidSubmit="HandleSignUp" FormName="SignUpForm">
+            <DataAnnotationsValidator />
+
+            <div class="form-group mb-3">
+                <label for="accountType">Select Account Type</label>
+                <div class="dropdown">
+
+                    <InputSelect id="accountType" class="inputSignup" @bind-Value="user.UserType">
+                        <option value="">-- Select --</option>
+                        <option value="Employee">Employee</option>
+                        <option value="TaskManager">Task Manager</option>
+                        <option value="Admin">Admin</option>
+                    </InputSelect>
+                </div>
+            </div>
+
+
+            <div class="form-group mb-3">
+                <label for="email">Company Email</label>
+                <InputText id="email" class="inputSignup" @bind-Value="user.Email" placeholder="COMPANY EMAIL" />
+                <ValidationMessage For="@(() => user.Email)" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="email">Password</label>
+                <InputText type="password" class="inputSignup" id="password" @bind-Value="user.Password"
+                    placeholder="PASSWORD" />
+
+                <ValidationMessage For="@(() => user.Password)" />
+            </div>
+
+
+            <button type="submit" class="btn">SIGN UP</button>
+            <div class="signup-link">
+                Already have an account? <a href="/auth/login">Log in</a>
+            </div>
+        </EditForm>
+    </div>
+
+</div>
+
+
+@code {
+    private User user = new User();
+    private async Task HandleSignUp()
+    {
+        try
+        {
+
+            Console.WriteLine("\n\n\n");
+            Console.WriteLine("Before saving:");
+            Console.WriteLine($"UserId: {user.UserId}");
+            Console.WriteLine($"UserType: {user.UserType}");
+            Console.WriteLine($"Email: {user.Email}");
+            Console.WriteLine($"Skills: {user.Skills}");
+            Console.WriteLine($"JoinedOn: {user.JoinedOn}");
+            Console.WriteLine($"MinWorkingHours: {user.MinWorkingHours}");
+            Console.WriteLine("\n\n\n");
+
+            var existingUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Email == user.Email);
+            if (existingUser != null)
+            {
+                await JS.InvokeVoidAsync("alert", "Email already exists. Please use a different email.");
+                return;
+            }
+
+
+            if (string.IsNullOrEmpty(user.UserId))
+            {
+                user.UserId = (user.UserType == UserType.TaskManager
+                ? "TM" : user.UserType == UserType.Employee ? "EM"
+                : "AD") + "-" + System.Guid.NewGuid().ToString().Substring(0, 8);
+            }
+
+            user.JoinedOn = DateTime.UtcNow;
+            user.Otp = new Random().Next(1000, 9999);
+
+            Console.WriteLine("\n");
+            Console.WriteLine($"NEW OTP ==== {user.Otp}");
+            Console.WriteLine("\n");
+
+            // TODO: We should neva eva store password in plain text, but for now we just keep it that way
+            @* user.Password = Hashed Password; *@
+
+            Console.WriteLine("After processing:");
+            Console.WriteLine($"UserId: {user.UserId}");
+            Console.WriteLine($"UserType: {user.UserType}");
+            Console.WriteLine($"Email: {user.Email}"); // Check again after processing
+            Console.WriteLine($"Skills: {user.Skills}");
+            Console.WriteLine($"JoinedOn: {user.JoinedOn}");
+            Console.WriteLine($"MinWorkingHours: {user.MinWorkingHours}");
+            Console.WriteLine("\n\n\n");
+
+            DbContext.Users.Add(user);
+            await DbContext.SaveChangesAsync();
+
+            // We will do the sending email baadaye, don worry
+
+            await SendEmail(user.Email, user.Otp ?? 0000);
+
+            await JS.InvokeVoidAsync("setCookie", "userId", user.UserId);
+            await JS.InvokeVoidAsync("setCookie", "userType", user.UserType.ToString());
+            await JS.InvokeVoidAsync("setCookie", "email", user.Email);
+
+            user = new User();
+
+            NavigationManager.NavigateTo("/auth/verify", forceLoad: true);
+
+        }
+        catch (Exception ex)
+        {
+
+            Console.WriteLine($"Error saving user: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Error: {ex.Message}");
+        }
+    }
+
+
+
+    private async Task SendEmail(string recipientEmail, int otp)
+    {
+        try
+        {
+
+            var client = new PostmarkClient("e0fa1671-3897-4017-918b-4e7e2e9d2599");
+
+
+            @* the new email message *@
+            var message = new PostmarkMessage
+            {
+                To = user.Email,
+                From = "Managemate <mail@cueaspace.com> ",
+                TrackOpens = true,
+                Subject = "Welcome on board mate!",
+                TextBody = "Use the code below to verify your email.",
+                HtmlBody = $"Use code <strong>{user.Otp}</strong> to verify your email",
+                MessageStream = "outbound",
+                Tag = "Managemate",
+            };
+
+            var sendResult = await client.SendMessageAsync(message);
+
+            if (sendResult.Status != PostmarkStatus.Success)
+            {
+                Console.WriteLine($"Failed to send email: {sendResult.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred while sending the email: {ex.Message}");
+        }
+    }
+}

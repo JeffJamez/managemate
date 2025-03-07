@@ -1,0 +1,100 @@
+@page "/admin/reports(old)"
+@layout AdminDashboardLayout
+
+<PageTitle>Manage Tasks Reports</PageTitle>
+
+
+<style>
+    .reports-body {
+        margin-top: 70px;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .reports-body h2 {
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    .container {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 20px;
+    }
+
+    .column {
+        width: 30%;
+    }
+
+    .entry {
+        border-bottom: 1px solid black;
+        padding: 10px;
+        cursor: pointer;
+    }
+
+    .reports-popup {
+        display: none;
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border: 2px solid black;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .close-report {
+        margin-top: 10px;
+        cursor: pointer;
+        color: red;
+    }
+</style>
+
+
+<div class="reports-body">
+    <div class="container">
+        <div class="column">
+            <h2>Attendance</h2>
+            <div class="entry" onclick="openPopup('John Doe - 90% Attendance')">John Doe - 90%</div>
+            <div class="entry" onclick="openPopup('Jane Smith - 85% Attendance')">Jane Smith - 85%</div>
+            <div class="entry" onclick="openPopup('Michael Brown - 95% Attendance')">Michael Brown - 95%</div>
+            <div class="entry" onclick="openPopup('Sarah Wilson - 80% Attendance')">Sarah Wilson - 80%</div>
+        </div>
+        <div class="column">
+            <h2>Payroll</h2>
+            <div class="entry" onclick="openPopup('John Doe - ksh300000 Salary')">John Doe - ksh300000</div>
+            <div class="entry" onclick="openPopup('Jane Smith - ksh 80000 Salary')">Jane Smith - ksh80000</div>
+            <div class="entry" onclick="openPopup('Michael Brown - ksh 100000 Salary')">Michael Brown - ksh100000</div>
+            <div class="entry" onclick="openPopup('Sarah Wilson - ksh 150000 Salary')">Sarah Wilson - ksh90000</div>
+        </div>
+        <div class="column">
+            <h2>Performance</h2>
+            <div class="entry" onclick="openPopup('John Doe - Excellent Performance')">John Doe - Excellent</div>
+            <div class="entry" onclick="openPopup('Jane Smith - Good Performance')">Jane Smith - Good</div>
+            <div class="entry" onclick="openPopup('Michael Brown - Outstanding Performance')">Michael Brown -
+                Outstanding
+            </div>
+            <div class="entry" onclick="openPopup('Sarah Wilson - Satisfactory Performance')">Sarah Wilson -
+                Satisfactory
+            </div>
+        </div>
+    </div>
+
+    <div id="popup" class="reports-popup">
+        <p id="popupText"></p>
+        <button class="close-report" onclick="closePopup()">Close</button>
+    </div>
+</div>
+
+
+<script>
+    function openPopup(text) {
+        document.getElementById('popupText').innerText = text;
+        document.getElementById('popup').style.display = 'block';
+    }
+    function closePopup() {
+        document.getElementById('popup').style.display = 'none';
+    }
+</script>

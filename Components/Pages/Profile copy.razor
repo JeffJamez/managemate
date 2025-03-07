@@ -1,0 +1,284 @@
+@page "/profile2"
+@layout UserDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@using Managemate.Models
+@using Microsoft.EntityFrameworkCore
+
+<PageTitle>Profile</PageTitle>
+
+<style>
+    .body_div {
+        margin-top: 75px;
+        display: flex;
+    }
+
+    .details_side,
+    .skills_side {
+        list-style: none;
+    }
+
+    .body_div {
+        justify-content: center;
+    }
+
+    .employeedetails {
+        border: 20px black;
+        padding-right: 150px;
+        width: 440px;
+        border-color: black;
+    }
+
+    .relevant_skills {
+        padding-left: 150px;
+        padding-top: 45px;
+        width: 440px;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .profilevector {
+        width: 100px;
+
+    }
+
+    .details_side {
+
+        font-size: 18px;
+    }
+
+    .relevantheading {
+        font-size: 20px;
+        align-items: center;
+    }
+
+    .skills_side {
+        font-size: 16px;
+        align-items: center;
+    }
+
+    .details_side li {
+        padding-top: 10px;
+    }
+
+    .skill_list {
+        padding-top: 20px;
+    }
+
+    .skill {
+        background-color: rgba(48, 47, 47, 0.233);
+        border-radius: 8px;
+        text-align: center
+    }
+
+
+
+    .skill:hover {
+        background-color: #ADF0D1;
+    }
+
+    .floating-button-edit-profile {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 1000;
+    }
+</style>
+
+@if (isLoading)
+{
+    <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
+        <div class="spinner-border" role="status" style="width: 3rem; height: 3rem; color: #2dad9d">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+
+else
+{
+    <div class="body_div">
+        <div class="employeedetails">
+            <ul class="details_side">
+                <li><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path fill="currentColor"
+                            d="M12 12q-1.65 0-2.825-1.175T8 8t1.175-2.825T12 4t2.825 1.175T16 8t-1.175 2.825T12 12m-8 8v-2.8q0-.85.438-1.562T5.6 14.55q1.55-.775 3.15-1.162T12 13t3.25.388t3.15 1.162q.725.375 1.163 1.088T20 17.2V20z" />
+                    </svg></li>
+                <li>
+                    <b>Name: </b> @(currentUser?.Email.Split('@')[0].Replace(".", " ").ToLower())
+                </li>
+                <li>
+                    <b>Company Email: </b> @(currentUser?.Email)
+                </li>
+                <li>
+                    <b>Date Of Joining Company: </b>
+                    @(currentUser?.JoinedOn.ToString("MMMM dd, yyyy"))
+                </li>
+            </ul>
+
+        </div>
+        <div class="relevant_skills">
+            @if (currentUserType == UserType.Employee)
+            {
+                <ul class="skills_side">
+                    <div class="relevantheading">Your skill set:</div>
+                    @foreach (var skill in mySkills)
+                    {
+                        <li class="skill_list">
+                            <div class="skill">@skill</div>
+                        </li>
+                    }
+                </ul>
+            }
+            else if (currentUserType == UserType.TaskManager)
+            {
+                <div class="relevantheading mb-4" style="font-size: 18px; font-weight: bold;">Employees Under Your management:
+                </div>
+                @foreach (var employee in assignedEmployees)
+                {
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <b class="card-title">@employee?.Email?.Split('@')[0]?.Split('.')[0]</b>
+                            <p class="card-text mb-0">
+                                <small class="text-muted">Assigned Tasks: @employee.TaskCount</small>
+                            </p>
+                            <div class="small">
+                                <strong>Tasks:</strong>
+                                <ul class="list-unstyled mt-1">
+                                    @foreach (var task in employee.TaskNames)
+                                    {
+                                        <li class="skill mb-1">@task</li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+
+@if (currentUserType == UserType.Employee)
+{
+    <button class="btn rounded-circle floating-button-edit-profile "
+        style="width: 60px; height: 60px; background-color: #ADF0D1;">
+        <NavLink class="nav-link" href="/employee/skills">
+            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                <path fill="currentColor"
+                    d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-2 2v-4.25L17.625 2.175L21.8 6.45L7.25 21zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z">
+                </path>
+            </svg>
+        </NavLink>
+    </button>
+}
+
+
+@code {
+
+    private bool isLoading = true;
+
+    private User currentUser;
+    private string currentUserId;
+
+    private UserType currentUserType;
+
+    private List<string> mySkills = new();
+
+    private List<EmployeeInfo> assignedEmployees = new();
+
+    private class EmployeeInfo
+    {
+        public string Email { get; set; }
+        public int TaskCount { get; set; }
+        public List<string> TaskNames { get; set; } = new();
+    }
+
+
+    @* Getting the logged in user info. i.e the user id and user type *@
+
+    @* 
+        If it is an employee who is logged in, get the skills of that employee
+        if it is task manager who is logged in, get the employees who the TM has ever assigned tasks to
+    *@
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+            string userType = await JS.InvokeAsync<string>("getCookie", "userType");
+
+            if (userId != null && userType != null)
+            {
+                try
+                {
+                    currentUserId = userId;
+                    currentUserType = Enum.Parse<UserType>(userType);
+
+                    var user = await DbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+                    if (user is not null)
+                    {
+                        currentUser = user;
+
+                        if (currentUserType == UserType.Employee)
+                        {
+
+                            if (!string.IsNullOrEmpty(user.Skills))
+                            {
+
+                                mySkills = user.Skills.Split(',').ToList();
+                            }
+                        }
+                        else if (currentUserType == UserType.TaskManager)
+                        {
+                            await LoadAssignedEmployees();
+                        }
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading user data: {ex.Message}");
+                }
+
+                finally
+                {
+                    isLoading = false;
+                    StateHasChanged();
+                }
+            }
+        }
+    }
+
+    @* 
+        This method is called, if the logged in user is a task manager, 
+        to get the list of employees they have ever assigned a task to
+    *@
+
+    private async Task LoadAssignedEmployees()
+    {
+        var tasks = await DbContext.TasksToDo
+        .Where(t => t.CreatedById == currentUserId)
+        .Include(t => t.AssignedUsers)
+        .ThenInclude(au => au.AssignedEmployee)
+        .ToListAsync();
+
+        var employeeGroups = tasks
+        .SelectMany(t => t.AssignedUsers)
+        .GroupBy(au => au.AssignedEmployee)
+        .Select(g => new EmployeeInfo
+        {
+            Email = g.Key.Email,
+            TaskCount = g.Count(),
+            TaskNames = tasks
+        .Where(t => t.AssignedUsers.Any(au => au.AssignedEmployeeId == g.Key.UserId))
+        .Select(t => t.Name)
+        .ToList()
+        })
+        .ToList();
+
+        assignedEmployees = employeeGroups;
+    }
+}

@@ -1,0 +1,802 @@
+@page "/manager/tasks"
+@layout UserDashboardLayout
+@rendermode InteractiveServer
+@inject ManageMateDBConetxt DbContext
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@using Managemate.Models
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel.DataAnnotations
+
+
+<PageTitle>Manage Tasks</PageTitle>
+
+<style>
+    .skill-button {
+        border: none;
+        background-color: rgb(194, 194, 194);
+        transition: all 0.2s;
+        color: #000;
+    }
+
+    .skill-button:hover {
+        background-color: #2dad9d;
+        ;
+    }
+
+    .selected {
+        background-color: #2dad9d;
+        color: #fff;
+    }
+
+
+    .manage-tasks-section {
+        display: flex;
+        justify-content: space-around;
+        padding: 20px;
+        margin-top: 70px;
+    }
+
+    .task-column {
+        width: 20%;
+        border-radius: 10px;
+        border: 2px solid black;
+        padding: 20px;
+        text-align: center;
+        min-height: 300px;
+        max-height: 400px;
+        overflow-y: auto;
+        /* Enables scrolling */
+        background-color: #f9f9f9;
+    }
+
+    .task {
+        background: white;
+        padding: 10px 22px;
+        margin: 5px 0;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        gap: 2px;
+    }
+
+    .task-column h3 {
+        font-size: 20px;
+    }
+
+    .tasks-emp-modal-content h2 {
+        font-size: 20px;
+        font-weight: bold;
+
+    }
+
+
+    .task-column button {
+        padding: .1rem .3rem;
+        font-size: 0.675rem;
+        background-color: #2dad9d;
+        border: none;
+        border-radius: 2px;
+    }
+
+    .task-column button:hover {
+        background-color: #2dad9d;
+    }
+
+     .custom-range {
+        accent-color: #2dad9d;
+    }
+
+    .custom-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #2dad9d;
+        border-radius: 50%;
+        cursor: pointer;
+    }
+
+    .custom-range::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        background: #2dad9d;
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+    }
+
+    .custom-range::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 8px;
+        background: #ddd;
+        border-radius: 4px;
+    }
+
+    .custom-range::-moz-range-track {
+        width: 100%;
+        height: 8px;
+        background: #ddd;
+        border-radius: 4px;
+    }
+</style>
+
+<section class="manage-tasks-section">
+    <div class="task-column">
+        <h3>Tasks Unassigned</h3>
+        @foreach (var task in tasks.Where(t => t.Status == STATUSENUM.UnAssigned))
+        {
+
+            <div class="task">
+                <div class="row">
+                    <div class="col-9">
+                        <div class="row" style="cursor: pointer" @onclick="() => ShowTaskDetails(task)">
+                            @task.Name
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12" style="display: contents;">
+                                <span style="font-size: 12px;">Due: @task.Deadline.ToShortDateString()</span>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="col-1">
+                        <button class="btn btn-primary btn-small" @onclick="() => ShowAssignModal(task)">Assign</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+
+    <div class="task-column">
+        <h3>Tasks In Progress</h3>
+        @foreach (var task in tasks.Where(t => t.Status == STATUSENUM.InProgress))
+        {
+
+            <div class="task border border-warning" style="cursor: pointer" >
+                <div class="d-flex" style="cursor: pointer" @onclick="() => ShowTaskDetails(task)">@task.Name</div>
+            </div>
+        }
+    </div>
+
+    <div class="task-column">
+        <h3>Completed Tasks</h3>
+        @foreach (var task in tasks.Where(t => t.Status == STATUSENUM.Complete))
+        {
+
+            <div class="task border border-success">
+                <div class="row">
+                    <div class="col-9">
+                         <div class="d-flex">@task.Name</div>
+                    </div>
+
+                    <div class="col-2">
+                         <button class="btn btn-success btn-small" style="background-color: #00203f;" @onclick="() => ShowReviewModal(task)">Review</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+    </div>
+
+    <div class="task-column">
+        <h3>Reviewed Tasks</h3>
+        @foreach (var task in tasks.Where(t => t.Status == STATUSENUM.Reviewed))
+        {
+
+            <div class="task">
+                <div class="d-flex" @onclick="() => ShowTaskDetails(task)">@task.Name</div>
+            </div>
+        }
+
+    </div>
+</section>
+
+<div class="container" style="margin-top: 10px; display: flex; justify-content: center;">
+    <button class="btn btn-primary" style="background-color: #2dad9d" @onclick="() => showCreateModal = true">
+        Create New Task
+    </button>
+
+</div>
+
+
+@if (showCreateModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index:auto 600">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Task</h5>
+                    <button type="button" class="btn-close" @onclick="() => showCreateModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@newTask" OnValidSubmit="CreateTask">
+                        <DataAnnotationsValidator />
+
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Task Name</label>
+                                    <InputText @bind-Value="newTask.Name" class="form-control" />
+                                    <ValidationMessage For="@(() => newTask.Name)" />
+                                </div>
+                            </div>
+
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Deadline</label>
+                                    <InputDate @bind-Value="newTask.Deadline" class="form-control" />
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <InputTextArea @bind-Value="newTask.Description" class="form-control" />
+                        </div>
+
+
+                        <div class="mb-3">
+                            <label class="form-label">Select skills needed for this task</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var skill in availableSkills)
+                                {
+                                    <button type="button"
+                                        class="btn skill-button @(selectedSkills.Contains(skill) ? "btn-success selected" : "btn-outline-secondary")"
+                                        @onclick="@(e => ToggleSkill(skill))">
+                                        @skill
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary"
+                                @onclick="() => showCreateModal = false">Close</button>
+                            <button type="submit" class="btn btn-primary" disabled="@(!selectedSkills.Any())">Create
+                                Task</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAssignModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index:auto 600">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Assign Task: @selectedTask?.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseAssignModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    @if (qualifiedEmployees.Any())
+                    {
+                        <EditForm Model="@assignmentModel" OnValidSubmit="AssignTask">
+                            <div class="mb-3">
+
+                                <div class="my-3">@qualifiedEmployees.Count() Employee@(qualifiedEmployees.Count() > 1 ? "" :"s") qualify for this task</div>
+
+                                <label class="form-label">Select Employee who top Assign task to</label>
+                                <InputSelect class="form-select" @bind-Value="assignmentModel.SelectedEmployeeId">
+                                    <option value="">Choose an employee...</option>
+                                    @foreach (var employee in qualifiedEmployees)
+                                    {
+                                        <option value="@employee.UserId">@employee.Email.Split('@')[0].Split('.')[0]</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="CloseAssignModal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Assign</button>
+                            </div>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">
+                            No employee qualifies for this task.
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseAssignModal">Close</button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+@if (showDetailsModal && selectedTask != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditing ? "Edit Task" : "Task Details")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDetailsModal"></button>
+                </div>
+                <div class="modal-body">
+                       @if (isEditing)
+                    {
+                        <EditForm Model="@editingTask" OnValidSubmit="SaveTaskEdits">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label class="form-label">Task Name</label>
+                                <InputText @bind-Value="editingTask.Name" class="form-control" />
+                                <ValidationMessage For="@(() => editingTask.Name)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Description</label>
+                                <InputTextArea @bind-Value="editingTask.Description" class="form-control" rows="3" />
+                                <ValidationMessage For="@(() => editingTask.Description)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Deadline</label>
+                                <InputDate @bind-Value="editingTask.Deadline" class="form-control" />
+                                <ValidationMessage For="@(() => editingTask.Deadline)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Required Skills</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach (var skill in availableSkills)
+                                    {
+                                        <button type="button"
+                                            class="btn skill-button @(selectedSkills.Contains(skill) ? "btn-success selected" : "btn-outline-secondary")"
+                                            @onclick="@(e => ToggleSkill(skill))">
+                                            @skill
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                            </div>
+                        </EditForm>
+                    } else {
+                        <div class="mb-3">
+                        <div class="d-flex gap2">
+                            <div class="text-muted mr-3">Task Name: </div>
+                            <div class="fw-bold">@selectedTask.Name</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="text-muted">Description</h6>
+                        <p>@selectedTask.Description</p>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <h6 class="text-muted">Status</h6>
+                            <span class="badge bg-@GetStatusColor(selectedTask.Status)">
+                                @selectedTask.Status
+                            </span>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-muted">Deadline</h6>
+                            <p>@selectedTask.Deadline.ToShortDateString()</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-muted">Task ID</h6>
+                            <p>@selectedTask.TaskId</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="text-muted">Required Skills</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var skill in selectedTask.SkillsNeeded?.Split(',') ?? Array.Empty<string>())
+                            {
+                                <span class="badge bg-info">@skill</span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="text-muted">Assignment Status</h6>
+                        @if (assignedEmployee != null)
+                        {
+                            <p>Assigned to: @assignedEmployee.Email</p>
+                        }
+                        else
+                        {
+                            <p>Not yet assigned</p>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(selectedTask.Review))
+                    {
+                        <div class="mb-3">
+                            <h6 class="text-muted">Review</h6>
+                            <p>@selectedTask.Review</p>
+                            
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="text-muted">Rating:</span>
+                                <div class="progress" style="height: 20px; width: 100px;">
+                                    <div class="progress-bar bg-success" 
+                                        style="width: @(selectedTask.Rating * 25)%">
+                                        @selectedTask.Rating/4
+                                    </div>
+                                </div>
+                            </div>
+  
+                        </div>
+                    }
+                    }
+                    
+                </div>
+
+                 @if (!isEditing){
+                      <div class="modal-footer">
+                        @if (selectedTask.Status == STATUSENUM.UnAssigned)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="StartEdit">Edit Task</button>
+                                <button type="button" class="btn btn-danger me-2" @onclick="DeleteTask">Delete Task</button>
+                            }
+                        <button type="button" class="btn btn-secondary" @onclick="CloseDetailsModal">Close</button>
+                     </div>
+                 }
+              
+            </div>
+        </div>
+    </div>
+}
+
+ @* Review Modal starts here *@
+
+ @if (showReviewModal && selectedTask != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Review Task: @selectedTask.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseReviewModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@reviewModel" OnValidSubmit="SubmitReview">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-4">
+                            <label class="form-label">Rating (1-4)</label>
+                            <div class="d-flex align-items-center gap-3">
+                                <input type="range" class="form-range custom-range flex-grow-1" 
+                                    min="1" max="4" step="1"
+                                    style="accent-color: #2dad9d;"
+                                    @bind="reviewModel.Rating" />
+                                <span class="badge" style="background-color: #2dad9d;">@reviewModel.Rating</span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Review Message</label>
+                            <InputTextArea @bind-Value="reviewModel.Message" 
+                                class="form-control" rows="3" />
+                            <ValidationMessage For="@(() => reviewModel.Message)" />
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseReviewModal">Cancel</button>
+                            <button type="submit" class="btn btn-success" style="background-color: #2dad9d;">Submit Review</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+@code {
+    private bool showCreateModal = false;
+    private TaskToDo newTask = new()
+    {
+        TaskId = $"TSK-{Guid.NewGuid().ToString().Substring(0, 8)}",
+        Status = STATUSENUM.UnAssigned,
+        Deadline = DateTime.Now.AddDays(7)
+    };
+
+    private List<string> selectedSkills = new();
+    private List<string> availableSkills = new()
+{
+"Technical", "Problem Solving", "Cultural Awareness",
+"Analytical Thinking", "Customer Focus", "Initiative",
+"Project Management", "Negotiation Skills", "Conflict Resolution",
+"Graphic Design", "Programming", "Web Hosting",
+"Attention To Detail", "Time Management", "Collaboration",
+"Leadership", "Adaptability"
+};
+
+    private void ToggleSkill(string skill)
+    {
+        if (selectedSkills.Contains(skill))
+        {
+            selectedSkills.Remove(skill);
+        }
+        else
+        {
+            selectedSkills.Add(skill);
+        }
+    }
+
+
+    private bool isEditing = false;
+    private TaskToDo editingTask = new();
+
+
+
+    private List<TaskToDo> tasks = new();
+    private bool firstRender = true;
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadTasks();
+            this.firstRender = false;
+            StateHasChanged();
+        }
+    }
+
+
+    private async Task LoadTasks()
+    {
+        string userId = await JS.InvokeAsync<string>("getCookie", "userId");
+
+        tasks = await DbContext.TasksToDo
+        .Where(t => t.CreatedById == userId)
+        .OrderByDescending(t => t.Deadline)
+        .ToListAsync();
+    }
+
+
+    private async Task CreateTask()
+    {
+        string creatorId = await JS.InvokeAsync<string>("getCookie", "userId");
+
+        newTask.CreatedById = creatorId;
+        newTask.SkillsNeeded = string.Join(",", selectedSkills);
+
+        DbContext.TasksToDo.Add(newTask);
+        await DbContext.SaveChangesAsync();
+
+
+        await LoadTasks();
+
+        showCreateModal = false;
+
+        newTask = new()
+        {
+            TaskId = $"TSK-{Guid.NewGuid().ToString().Substring(0, 8)}",
+            Status = STATUSENUM.UnAssigned,
+            Deadline = DateTime.Now.AddDays(7)
+        };
+        selectedSkills.Clear();
+    }
+
+
+    private bool showReviewModal = false;
+    private ReviewModel reviewModel = new();
+
+    private class ReviewModel
+    {
+        [Required]
+        [Range(1, 4)]
+        public int Rating { get; set; } = 1;
+        
+        [Required]
+        public string Message { get; set; }
+    }
+
+
+    private void ShowReviewModal(TaskToDo task)
+{
+    selectedTask = task;
+    reviewModel = new ReviewModel();
+    showReviewModal = true;
+}
+
+private async Task SubmitReview()
+{
+    if (selectedTask != null)
+    {
+        selectedTask.Rating = reviewModel.Rating;
+        selectedTask.Review = reviewModel.Message;
+        selectedTask.Status = STATUSENUM.Reviewed;
+
+        await DbContext.SaveChangesAsync();
+        await LoadTasks();
+        CloseReviewModal();
+    }
+}
+
+private void CloseReviewModal()
+{
+    showReviewModal = false;
+    selectedTask = null;
+    reviewModel = new();
+}
+
+
+   
+    private bool showAssignModal = false;
+    private TaskToDo? selectedTask;
+    private List<User> qualifiedEmployees = new();
+    private AssignmentModel assignmentModel = new();
+
+    private class AssignmentModel
+    {
+        public string SelectedEmployeeId { get; set; }
+    }
+
+       // ==== START OF: our custom A not I algorithm 😂
+
+    private async Task ShowAssignModal(TaskToDo task)
+    {
+        selectedTask = task;
+
+      
+
+        var requiredSkills = task.SkillsNeeded?.Split(',').ToList() ?? new List<string>();
+
+        var employees = await DbContext.Users
+        .Where(u => u.UserType == UserType.Employee)
+        .ToListAsync();
+
+        qualifiedEmployees = employees.Where(emp =>
+        {
+            var employeeSkills = emp.Skills?.Split(',').ToList() ?? new List<string>();
+            return requiredSkills.All(skill => employeeSkills.Contains(skill));
+        }).ToList();
+
+        assignmentModel = new AssignmentModel();
+        showAssignModal = true;
+    }
+
+    private async Task AssignTask()
+    {
+        if (selectedTask != null && !string.IsNullOrEmpty(assignmentModel.SelectedEmployeeId))
+        {
+            var userTask = new UserTask
+            {
+                AssignedEmployeeId = assignmentModel.SelectedEmployeeId,
+                TaskId = selectedTask.TaskId
+            };
+
+            selectedTask.Status = STATUSENUM.InProgress;
+
+            await DbContext.UserTasks.AddAsync(userTask);
+            await DbContext.SaveChangesAsync();
+
+            await LoadTasks();
+            CloseAssignModal();
+        }
+    }
+
+     // ==== END OF: our custom A not I algorithm 😂
+
+    private void CloseAssignModal()
+    {
+        showAssignModal = false;
+        selectedTask = null;
+        qualifiedEmployees.Clear();
+        assignmentModel = new();
+    }
+   
+
+    // ===== this one below if for the showing the detailed view of a task, when user click on a task
+   private bool showDetailsModal = false;  
+   private User? assignedEmployee; 
+
+    private async Task ShowTaskDetails(TaskToDo task)
+    {
+        selectedTask = task;
+        assignedEmployee = null;  
+
+        var userTask = await DbContext.UserTasks
+            .Include(ut => ut.AssignedEmployee)
+            .FirstOrDefaultAsync(ut => ut.TaskId == task.TaskId);
+
+        if (userTask != null)
+        {
+            assignedEmployee = userTask.AssignedEmployee;
+        }
+
+        showDetailsModal = true;
+    }
+
+    private async Task DeleteTask()
+{
+    if (selectedTask != null)
+    {
+        try
+        {
+            DbContext.TasksToDo.Remove(selectedTask);
+            await DbContext.SaveChangesAsync();
+            await LoadTasks();
+            CloseDetailsModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting task: {ex.Message}");
+        }
+    }
+}
+
+
+     private void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedTask = null;
+        assignedEmployee = null;
+        isEditing = false;
+        selectedSkills.Clear();
+    }
+
+    private string GetStatusColor(STATUSENUM status) => status switch
+    {
+        STATUSENUM.UnAssigned => "secondary",
+        STATUSENUM.InProgress => "warning",
+        STATUSENUM.Complete => "success",
+        STATUSENUM.Reviewed => "primary",
+        _ => "secondary"
+    };
+
+    private void StartEdit()
+{
+    editingTask = new TaskToDo
+    {
+        TaskId = selectedTask.TaskId,
+        Name = selectedTask.Name,
+        Description = selectedTask.Description,
+        Deadline = selectedTask.Deadline,
+        Status = selectedTask.Status,
+        CreatedById = selectedTask.CreatedById
+    };
+    
+    selectedSkills = selectedTask.SkillsNeeded?.Split(',').ToList() ?? new();
+    isEditing = true;
+}
+
+private void CancelEdit()
+{
+    isEditing = false;
+    selectedSkills.Clear();
+}
+
+private async Task SaveTaskEdits()
+{
+    if (selectedTask != null)
+    {
+        selectedTask.Name = editingTask.Name;
+        selectedTask.Description = editingTask.Description;
+        selectedTask.Deadline = editingTask.Deadline;
+        selectedTask.SkillsNeeded = string.Join(",", selectedSkills);
+
+        await DbContext.SaveChangesAsync();
+        await LoadTasks();
+        
+        isEditing = false;
+        selectedSkills.Clear();
+        CloseDetailsModal();
+    }
+}
+
+
+}

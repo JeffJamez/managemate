@@ -1,0 +1,16 @@
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject IHttpContextAccessor HttpContextAccessor
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (HttpContextAccessor.HttpContext?.Request.Cookies["userId"] == null)
+        {
+            NavigationManager.NavigateTo("/auth/login");
+            return;
+        }
+    }
+}
+
+@Body

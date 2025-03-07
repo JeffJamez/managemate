@@ -1,0 +1,22 @@
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<button @onclick="HandleLogout" class="list-group-item list-group-item-action mb-3"
+    style="background-color: transparent; color: black; border: none;">
+    Logout
+</button>
+
+
+
+@code {
+
+    private async Task HandleLogout()
+    {
+        await JS.InvokeVoidAsync("deleteCookie", "userId");
+        await JS.InvokeVoidAsync("deleteCookie", "userType");
+        await JS.InvokeVoidAsync("deleteCookie", "email");
+
+        NavigationManager.NavigateTo("/auth/login", forceLoad: true);
+    }
+}
