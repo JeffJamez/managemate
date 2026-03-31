@@ -12,22 +12,22 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        ManageMate                                │
+│                        ManageMate                               │
 ├─────────────────────────────────────────────────────────────────┤
-│  Presentation Layer    │  Blazor Server (InteractiveServer)    │
+│  Presentation Layer    │  Blazor Server (InteractiveServer)     │
 │  ├─ Admin Dashboard    │  ├─ Role-based Layouts                 │
-│  ├─ Manager Dashboard  │  ├─ Component-based UI                │
-│  └─ Employee Portal    │  └─ State Management                  │
+│  ├─ Manager Dashboard  │  ├─ Component-based UI                 │
+│  └─ Employee Portal    │  └─ State Management                   │
 ├────────────────────────┼────────────────────────────────────────┤
 │  Business Logic        │  Services + Authorization              │
 │  ├─ Auth Service       │  ├─ Cookie Authentication              │
 │  ├─ Task Management    │  ├─ OTP Email Verification             │
-│  └─ Analytics          │  └─ Role-Based Access Control         │
+│  └─ Analytics          │  └─ Role-Based Access Control          │
 ├────────────────────────┼────────────────────────────────────────┤
 │  Data Access Layer     │  Entity Framework Core 9.0             │
-│  ├─ Code-First Migrations                                   │
-│  ├─ Pomelo MySQL Provider                                    │
-│  └─ Fluent API Configurations                                 │
+│  ├─ Code-First Migrations                                       │
+│  ├─ Pomelo MySQL Provider                                       │
+│  └─ Fluent API Configurations                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
